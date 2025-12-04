@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, reactive } from 'vue'
+import { useStorage } from '@vueuse/core'
+import { getSuggestions } from '@/api/suggestions'
+
+
 
 interface SearchEngine {
   id: string
@@ -8,6 +12,14 @@ interface SearchEngine {
   color: string
   url: string
 }
+
+interface Shortcut {
+  id: string
+  title: string
+  url: string
+  icon: string
+}
+
 
 const engines: SearchEngine[] = [
   { id: 'google', name: 'Google', icon: 'G', color: '#4285f4', url: 'https://www.google.com/search?q=' },
@@ -30,6 +42,27 @@ const showEngines = ref(false)
 const selectedIdx = ref(-1)
 const btnRef = ref<HTMLButtonElement | null>(null)
 const dropPos = ref({ top: 0, left: 0 })
+const suggestions = ref<string[]>([])
+
+const defaultShortcuts: Shortcut[] = [
+  { id: '1', title: 'GitHub', url: 'https://github.com', icon: 'https://github.com/favicon.ico' },
+  { id: '2', title: 'Bilibili', url: 'https://www.bilibili.com', icon: 'https://www.bilibili.com/favicon.ico' },
+  { id: '3', title: 'YouTube', url: 'https://www.youtube.com', icon: 'https://www.youtube.com/s/desktop/12d6b690/img/favicon.ico' },
+]
+const shortcuts = useStorage<Shortcut[]>('shortcuts', defaultShortcuts)
+
+// Context Menu State
+const showContextMenu = ref(false)
+const contextMenuPos = ref({ x: 0, y: 0 })
+const contextMenuTarget = ref<Shortcut | null>(null)
+const contextMenu = ref<HTMLElement | null>(null)
+
+// Dialog State
+const showDialog = ref(false)
+const dialogMode = ref<'add' | 'edit'>('add')
+const dialogForm = reactive({ title: '', url: '' })
+
+
 
 const time = ref(new Date())
 setInterval(() => time.value = new Date(), 1000)
@@ -37,10 +70,19 @@ setInterval(() => time.value = new Date(), 1000)
 const timeStr = computed(() => time.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }))
 const dateStr = computed(() => time.value.toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' }))
 
-watch(query, (v) => {
+watch([query, engine], async ([q, e]) => {
   selectedIdx.value = -1
-  showSuggestions.value = !!v.trim()
+  const text = q.trim()
+  if (text) {
+    suggestions.value = await getSuggestions(text, e.id)
+    showSuggestions.value = true
+  } else {
+    suggestions.value = []
+    showSuggestions.value = false
+  }
 })
+
+
 
 function select(e: SearchEngine) {
   engine.value = e
@@ -58,28 +100,144 @@ function toggle() {
   }
 }
 
-function search(e?: SearchEngine) {
-  const q = query.value.trim()
-  if (q) window.open((e || engine.value).url + encodeURIComponent(q), '_blank')
+function search(e?: SearchEngine | string) {
+  const q = typeof e === 'string' ? e : query.value.trim()
+  if (q) {
+    // If it's a string (suggestion), update query and use current engine
+    if (typeof e === 'string') {
+        query.value = q
+        window.open(engine.value.url + encodeURIComponent(q), '_blank')
+    } else {
+        // If it's an engine or undefined, use that engine
+        window.open((e || engine.value).url + encodeURIComponent(q), '_blank')
+    }
+    showSuggestions.value = false
+  }
 }
+
 
 function onKey(e: KeyboardEvent) {
   if (!showSuggestions.value) return
   if (e.key === 'ArrowDown') { e.preventDefault(); selectedIdx.value = Math.min(selectedIdx.value + 1, engines.length - 1) }
   else if (e.key === 'ArrowUp') { e.preventDefault(); selectedIdx.value = Math.max(selectedIdx.value - 1, -1) }
-  else if (e.key === 'Enter' && selectedIdx.value >= 0) { e.preventDefault(); search(engines[selectedIdx.value]) }
+  else if (e.key === 'Enter' && selectedIdx.value >= 0) {
+    e.preventDefault();
+    if (suggestions.value.length > 0) {
+        search(suggestions.value[selectedIdx.value])
+    } else {
+        search(engines[selectedIdx.value])
+    }
+  }
+
 }
 
 function onBlur() { setTimeout(() => { focused.value = false; showSuggestions.value = false }, 200) }
 function onFocus() { focused.value = true; showEngines.value = false; if (query.value.trim()) showSuggestions.value = true }
 function onClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.engine-selector-wrapper')) showEngines.value = false }
+
+function highlight(text: string) {
+  const q = query.value.trim()
+  if (!q) return text
+  // Escape regex special characters
+  const safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(`(${safeQ})`, 'gi'), '<b>$1</b>')
+}
+
+// Shortcuts Logic
+function openShortcut(s: Shortcut) {
+  window.open(s.url, '_blank')
+}
+
+function onShortcutContext(e: MouseEvent, s: Shortcut) {
+  e.preventDefault()
+  e.stopPropagation()
+  contextMenuTarget.value = s
+  contextMenuPos.value = { x: e.clientX, y: e.clientY }
+  showContextMenu.value = true
+
+  nextTick(() => {
+    window.addEventListener('click', closeContextMenu)
+    window.addEventListener('contextmenu', closeContextMenu)
+  })
+}
+
+function closeContextMenu(e?: Event) {
+  if (e && contextMenu.value && contextMenu.value.contains(e.target as Node)) return
+  showContextMenu.value = false
+  window.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('contextmenu', closeContextMenu)
+}
+
+function openAddDialog() {
+  dialogMode.value = 'add'
+  dialogForm.title = ''
+  dialogForm.url = ''
+  showDialog.value = true
+}
+
+function editShortcut() {
+  if (!contextMenuTarget.value) return
+  dialogMode.value = 'edit'
+  dialogForm.title = contextMenuTarget.value.title
+  dialogForm.url = contextMenuTarget.value.url
+  showDialog.value = true
+  closeContextMenu()
+}
+
+function deleteShortcut() {
+  if (!contextMenuTarget.value) return
+  const idx = shortcuts.value.findIndex(s => s.id === contextMenuTarget.value!.id)
+  if (idx !== -1) shortcuts.value.splice(idx, 1)
+  closeContextMenu()
+}
+
+function saveShortcut() {
+  if (!dialogForm.title || !dialogForm.url) return
+
+  let icon = ''
+  try {
+    const domain = new URL(dialogForm.url).hostname
+    icon = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+  } catch (e) {
+    icon = '' // Fallback or default icon
+  }
+
+  if (dialogMode.value === 'add') {
+    shortcuts.value.push({
+      id: Date.now().toString(),
+      title: dialogForm.title,
+      url: dialogForm.url,
+      icon
+    })
+  } else {
+    if (contextMenuTarget.value) {
+      const idx = shortcuts.value.findIndex(s => s.id === contextMenuTarget.value!.id)
+      if (idx !== -1) {
+        shortcuts.value[idx] = {
+          ...shortcuts.value[idx]!,
+          title: dialogForm.title,
+          url: dialogForm.url,
+          icon
+        }
+      }
+    }
+  }
+  showDialog.value = false
+}
+
+function onPageClick(e: MouseEvent) {
+  onClick(e) // Existing handler
+}
+
+
 </script>
 
 <template>
-  <div class="page" @click="onClick">
+  <div class="page" @click="onPageClick">
+
     <div class="bg" :style="{ backgroundImage: `url(${WALLPAPER_URL})` }"></div>
     <div class="blur" :class="{ active: focused || showSuggestions }"></div>
-    
+
     <div class="content">
       <div class="clock">
         <div class="time">{{ timeStr }}</div>
@@ -99,21 +257,68 @@ function onClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.engin
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-        
+
         <Transition name="slide">
           <div v-if="showSuggestions && query.trim()" class="suggestions">
-            <div class="sug-header">在各搜索引擎中搜索 "{{ query }}"</div>
-            <div v-for="(e, i) in engines" :key="e.id" class="sug-item" :class="{ sel: selectedIdx === i }" :style="{ '--d': `${i * 0.025}s` }" @mousedown.prevent="search(e)" @mouseenter="selectedIdx = i">
-              <span class="sug-icon" :style="{ color: e.color }">{{ e.icon }}</span>
-              <span class="sug-name">{{ e.name }}</span>
-              <span class="sug-text">{{ query }}</span>
-              <svg class="sug-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <div v-if="suggestions.length > 0">
+                <div v-for="(s, i) in suggestions" :key="s" class="sug-item sug-result" :class="{ sel: selectedIdx === i }" @mousedown.prevent="search(s)" @mouseenter="selectedIdx = i">
+                    <svg class="sug-icon-search" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span class="sug-text" v-html="highlight(s)"></span>
+                </div>
+            </div>
+            <div v-else>
+                <div class="sug-header">在各搜索引擎中搜索 "{{ query }}"</div>
+                <div v-for="(e, i) in engines" :key="e.id" class="sug-item" :class="{ sel: selectedIdx === i }" :style="{ '--d': `${i * 0.025}s` }" @mousedown.prevent="search(e)" @mouseenter="selectedIdx = i">
+                <span class="sug-icon" :style="{ color: e.color }">{{ e.icon }}</span>
+                <span class="sug-name">{{ e.name }}</span>
+                <span class="sug-text">{{ query }}</span>
+                <svg class="sug-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
             </div>
           </div>
+
         </Transition>
       </div>
 
+      <div class="shortcuts">
+        <div v-for="s in shortcuts" :key="s.id" class="shortcut-item" @click="openShortcut(s)" @contextmenu="onShortcutContext($event, s)">
+          <div class="shortcut-icon">
+            <img v-if="s.icon" :src="s.icon" :alt="s.title" @error="s.icon = ''">
+            <span v-else>{{ s.title.charAt(0).toUpperCase() }}</span>
+          </div>
+          <div class="shortcut-title">{{ s.title }}</div>
+        </div>
+        <div class="shortcut-item add-btn" @click.stop="openAddDialog">
+          <div class="shortcut-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+          <div class="shortcut-title">Add</div>
+        </div>
+      </div>
+
+      <Transition name="fade">
+        <div v-if="showContextMenu" ref="contextMenu" class="context-menu" :style="{ top: contextMenuPos.y + 'px', left: contextMenuPos.x + 'px' }">
+          <div class="ctx-item" @click="editShortcut">Edit</div>
+          <div class="ctx-item delete" @click="deleteShortcut">Delete</div>
+        </div>
+      </Transition>
+
+      <Transition name="fade">
+        <div v-if="showDialog" class="dialog-overlay" @click.self="showDialog = false">
+          <div class="dialog">
+            <div class="dialog-title">{{ dialogMode === 'add' ? 'Add Shortcut' : 'Edit Shortcut' }}</div>
+            <input v-model="dialogForm.title" class="dialog-input" placeholder="Title" @keyup.enter="saveShortcut">
+            <input v-model="dialogForm.url" class="dialog-input" placeholder="URL (https://...)" @keyup.enter="saveShortcut">
+            <div class="dialog-actions">
+              <button class="dialog-btn cancel" @click="showDialog = false">Cancel</button>
+              <button class="dialog-btn save" @click="saveShortcut">Save</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
       <Transition name="drop">
+
         <div v-if="showEngines" class="dropdown" :style="{ top: dropPos.top + 'px', left: dropPos.left + 'px' }">
           <button v-for="(e, i) in engines" :key="e.id" class="drop-item" :class="{ active: engine.id === e.id }" :style="{ '--d': `${i * 0.03}s` }" @click.stop="select(e)">
             <span class="drop-icon" :style="{ color: e.color }">{{ e.icon }}</span>
@@ -128,8 +333,8 @@ function onClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.engin
 <style scoped>
 .page { min-height: 100vh; position: relative; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; }
 .bg { position: absolute; inset: 0; background: #1a1a2e center/cover; transition: background-image 1s ease; }
-.blur { position: absolute; inset: 0; background: rgba(0,0,0,.15); backdrop-filter: blur(0); transition: all .6s ease; }
-.blur.active { background: rgba(0,0,0,.35); backdrop-filter: blur(30px) saturate(180%); }
+.blur { position: absolute; inset: 0; background: rgba(0,0,0,.15); backdrop-filter: blur(0); transition: all .25s ease-out; }
+.blur.active { background: rgba(0,0,0,.35); backdrop-filter: blur(30px) saturate(180%); transition: all .6s cubic-bezier(.16,1,.3,1); }
 
 .content { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem; padding-top: 20vh; }
 
@@ -174,8 +379,47 @@ function onClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.engin
 .sug-item:hover .sug-icon { transform: scale(1.15); }
 .sug-name { font-size: .85rem; font-weight: 500; color: rgba(255,255,255,.9); width: 100px; flex-shrink: 0; }
 .sug-text { flex: 1; font-size: .9rem; color: rgba(255,255,255,.7); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sug-icon-search { color: rgba(255,255,255,0.5); margin-right: 12px; }
+.sug-item:hover .sug-icon-search { color: rgba(255,255,255,0.9); }
+.sug-text b { color: #fff; font-weight: 600; }
+.sug-result { animation: none; }
+
+.shortcuts { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 16px; width: 100%; max-width: 680px; margin-top: 40px; }
+.shortcut-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: transform .2s; }
+.shortcut-item:hover { transform: translateY(-4px); }
+.shortcut-icon { width: 48px; height: 48px; background: rgba(255,255,255,.15); backdrop-filter: blur(10px); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #fff; overflow: hidden; transition: background .2s; }
+.shortcut-item:hover .shortcut-icon { background: rgba(255,255,255,.25); }
+.shortcut-icon img { width: 100%; height: 100%; object-fit: cover; }
+.shortcut-title { font-size: .85rem; color: rgba(255,255,255,.9); text-shadow: 0 2px 4px rgba(0,0,0,.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.add-btn .shortcut-icon { border: 1px dashed rgba(255,255,255,.3); background: transparent; }
+.add-btn:hover .shortcut-icon { border-color: rgba(255,255,255,.6); background: rgba(255,255,255,.1); }
+
+.context-menu { position: fixed; background: rgba(30,30,40,.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; padding: 4px; z-index: 1000; min-width: 120px; box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+.ctx-item { padding: 8px 12px; color: #fff; font-size: .9rem; cursor: pointer; border-radius: 4px; transition: background .2s; }
+.ctx-item:hover { background: rgba(255,255,255,.1); }
+.ctx-item.delete { color: #ff4d4f; }
+.ctx-item.delete:hover { background: rgba(255,77,79,.15); }
+
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(5px); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.dialog { background: #1a1a2e; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 24px; width: 90%; max-width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.dialog-title { font-size: 1.2rem; font-weight: 600; color: #fff; margin-bottom: 20px; }
+.dialog-input { width: 100%; padding: 12px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 8px; color: #fff; margin-bottom: 12px; outline: none; transition: border-color .2s; }
+.dialog-input:focus { border-color: rgba(255,255,255,.3); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.dialog-btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 500; transition: transform .1s; }
+.dialog-btn:active { transform: scale(.96); }
+.dialog-btn.cancel { background: transparent; color: rgba(255,255,255,.6); }
+.dialog-btn.cancel:hover { color: #fff; }
+.dialog-btn.save { background: #4285f4; color: #fff; }
+.dialog-btn.save:hover { background: #5295ff; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity .2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
 .sug-arrow { color: rgba(255,255,255,.4); flex-shrink: 0; transition: all .3s; }
+
 .sug-item:hover .sug-arrow { color: rgba(255,255,255,.8); transform: translateX(4px); }
+
 
 .drop-enter-active { animation: dropIn .35s cubic-bezier(.34,1.56,.64,1); }
 .drop-leave-active { animation: dropOut .25s ease; }
