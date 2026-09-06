@@ -28,6 +28,11 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://api.aloys23.link" />
         <link rel="preconnect" href="https://cn.bing.com" crossOrigin="" />
         <link rel="dns-prefetch" href="https://cn.bing.com" />
+        <script
+          defer
+          src="https://tongji.aloys233.top/analytics.js"
+          data-website-id="3be7e1b3-88bd-4a"
+        />
       </head>
       <body className="bg-[#050510] text-white overflow-x-hidden selection:bg-white/30">
         {children}
