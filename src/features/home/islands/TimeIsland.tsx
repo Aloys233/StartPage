@@ -1,41 +1,53 @@
 "use client"
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { TimeHeader } from '@/features/home/components/TimeHeader'
 
-const emptySubscribe = () => () => {}
+interface TimeIslandProps {
+  initialTimestamp?: number
+}
 
-export function TimeIsland() {
-  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
-  const [time, setTime] = useState<Date>(() => new Date())
+export function TimeIsland({ initialTimestamp }: TimeIslandProps) {
+  const [time, setTime] = useState<Date>(() =>
+    initialTimestamp ? new Date(initialTimestamp) : new Date(),
+  )
 
   useEffect(() => {
-    const timer = window.setInterval(() => setTime(new Date()), 1000)
+    let timerId: number
+
+    // 挂载后第一时间同步本地精确时间
+    setTime(new Date())
+
+    const tick = () => {
+      const now = new Date()
+      setTime(now)
+      const delay = 1000 - now.getMilliseconds()
+      timerId = window.setTimeout(tick, delay)
+    }
+
+    const now = new Date()
+    const initialDelay = 1000 - now.getMilliseconds()
+    timerId = window.setTimeout(tick, initialDelay)
+
     return () => {
-      window.clearInterval(timer)
+      window.clearTimeout(timerId)
     }
   }, [])
 
-  const timeStr = useMemo(() => {
-    if (!isMounted) return '--:--'
-    return time.toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }, [isMounted, time])
+  const hour = String(time.getHours()).padStart(2, '0')
+  const minute = String(time.getMinutes()).padStart(2, '0')
+  const second = String(time.getSeconds()).padStart(2, '0')
 
-  const dateStr = useMemo(() => {
-    if (!isMounted) return '加载中...'
-    return time.toLocaleDateString('zh-CN', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    })
-  }, [isMounted, time])
+  const dateStr = time.toLocaleDateString('zh-CN', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
 
   return (
     <div suppressHydrationWarning className="flex flex-col items-center">
-      <TimeHeader timeStr={timeStr} dateStr={dateStr} />
+      <TimeHeader hour={hour} minute={minute} second={second} dateStr={dateStr} />
     </div>
   )
 }
+

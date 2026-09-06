@@ -25,7 +25,7 @@ export function SearchEngineSelect({
     <div className="relative w-[176px] shrink-0">
       <button
         type="button"
-        className="flex h-full min-h-14 w-full items-center gap-2 rounded-[24px] border border-white/10 bg-white/10 px-4 text-white outline-none transition-all hover:bg-white/15 hover:border-white/20"
+        className="flex h-full min-h-14 w-full items-center gap-2 rounded-[24px] border border-white/10 bg-white/10 px-4 text-white outline-none transition-all hover:bg-white/15 hover:border-white/20 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
         aria-label="Choose search engine"
         aria-expanded={showEngineMenu}
         onClick={onToggle}

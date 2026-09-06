@@ -1,12 +1,29 @@
 "use client"
 
 import type { WheelEvent } from 'react'
-import { useMemo, useRef, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, GripHorizontal } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  GripHorizontal,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react'
 import { ShortcutsIsland } from '@/features/home/islands/ShortcutsIsland'
 import { getShortcutIcon } from '@/features/home/shortcuts'
 import { secondaryShortcutCategories } from '@/features/home/secondaryShortcuts'
 import { buildFaviconUrl, getHostname, openExternalLink } from '@/features/home/url'
+import {
+  getStoredWallpaperSource,
+  setStoredWallpaperSource,
+  triggerWallpaperRefresh,
+  WALLPAPER_SOURCES,
+  type WallpaperSource,
+} from '@/features/home/wallpaper'
 import { cn } from '@/lib/utils'
 
 type SwipeDirection = 'horizontal' | 'vertical'
@@ -16,11 +33,30 @@ const WHEEL_COOLDOWN_MS = 320
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
+const emptySubscribe = () => () => {}
+
+const subscribeResize = (onStoreChange: () => void) => {
+  window.addEventListener('resize', onStoreChange)
+  return () => window.removeEventListener('resize', onStoreChange)
+}
+
+const getOrientationSnapshot = () =>
+  typeof window !== 'undefined' && window.innerWidth >= window.innerHeight ? 'horizontal' : 'vertical'
+
+const getOrientationServerSnapshot = () => 'horizontal' as const
+
 export function SecondaryShortcutDeck() {
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const [activePage, setActivePage] = useState(0)
   const [direction, setDirection] = useState<SwipeDirection>('horizontal')
+  const [currentSource, setCurrentSource] = useState<WallpaperSource>(() => getStoredWallpaperSource())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const orientation = useSyncExternalStore(subscribeResize, getOrientationSnapshot, getOrientationServerSnapshot)
 
-  const totalPages = secondaryShortcutCategories.length + 1
+  const activeSource = isMounted ? currentSource : 'acg'
+  const activeOrientation = isMounted ? orientation : 'horizontal'
+
+  const totalPages = secondaryShortcutCategories.length + 2
   const maxPageIndex = totalPages - 1
   const canPrev = activePage > 0
   const canNext = activePage < maxPageIndex
@@ -28,10 +64,34 @@ export function SecondaryShortcutDeck() {
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const wheelTsRef = useRef(0)
 
+  useEffect(() => {
+    const onSourceChange = (event: Event) => {
+      const customEvent = event as CustomEvent<{ source?: WallpaperSource }>
+      if (customEvent.detail?.source) {
+        setCurrentSource(customEvent.detail.source)
+      }
+    }
+    window.addEventListener('wallpaper-source-change', onSourceChange)
+    return () => window.removeEventListener('wallpaper-source-change', onSourceChange)
+  }, [])
+
   const pageLabels = useMemo(
-    () => ['我的快捷方式', ...secondaryShortcutCategories.map((category) => category.name)],
+    () => ['我的快捷方式', ...secondaryShortcutCategories.map((category) => category.name), '壁纸设置'],
     [],
   )
+
+  const handleSelectSource = (source: WallpaperSource) => {
+    setCurrentSource(source)
+    setStoredWallpaperSource(source)
+  }
+
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    triggerWallpaperRefresh()
+    setTimeout(() => {
+      setIsRefreshing(false)
+    }, 800)
+  }
 
   const goToPage = (nextPage: number) => {
     setActivePage(clamp(nextPage, 0, maxPageIndex))
@@ -120,6 +180,22 @@ export function SecondaryShortcutDeck() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={cn(
+              'cards inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium tracking-[0.08em] transition [--card-hover-scale:1.02]',
+              activePage === maxPageIndex
+                ? 'border-white/50 bg-white/20 text-white'
+                : 'border-white/24 bg-white/8 text-white/90 hover:border-white/45 hover:bg-white/14',
+            )}
+            onClick={() => goToPage(maxPageIndex)}
+            aria-label="Wallpaper settings"
+            title="切换壁纸 API 设置"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+            <span>壁纸设置</span>
+          </button>
+
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-full border border-white/24 bg-white/8 px-3.5 py-2 text-xs font-medium tracking-[0.08em] text-white/90 transition hover:border-white/45 hover:bg-white/14"
@@ -248,6 +324,103 @@ export function SecondaryShortcutDeck() {
                   </div>
                 </section>
               ))}
+
+              {/* 壁纸 API 与外观设置专区 */}
+              <section className="h-full w-full shrink-0 overflow-y-auto px-5 pt-5 pb-8">
+                <header className="mb-5 flex flex-wrap items-center justify-between gap-3 px-1">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-amber-300" />
+                      <h3 className="text-lg font-semibold tracking-[0.08em] text-white [text-shadow:0_0_8px_rgba(0,0,0,0.5)]">
+                        壁纸 API 与外观设置
+                      </h3>
+                    </div>
+                    <p className="mt-1 text-sm text-white/60">
+                      支持切换微软 Bing 每日精选壁纸及 Aloys API 动漫与风景壁纸。
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] text-white/70">
+                      方向适配: {activeOrientation === 'horizontal' ? '横屏 (horizontal)' : '竖屏 (vertical)'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      className="cards inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs text-white transition hover:bg-white/20 active:scale-95 [--card-hover-scale:1.05]"
+                      title="随机换一张壁纸"
+                    >
+                      <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+                      <span>换一张壁纸</span>
+                    </button>
+                  </div>
+                </header>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {WALLPAPER_SOURCES.map((source) => {
+                    const isSelected = activeSource === source.id
+                    return (
+                      <div
+                        key={source.id}
+                        onClick={() => handleSelectSource(source.id)}
+                        className={cn(
+                          'cards group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-5 transition-all duration-300 [--card-hover-scale:1.02]',
+                          isSelected
+                            ? 'border-white/60 bg-white/15 shadow-[0_0_24px_rgba(255,255,255,0.12)]'
+                            : 'border-white/10 bg-black/25 hover:border-white/25 hover:bg-black/40',
+                        )}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className={cn('rounded-full border px-2.5 py-0.5 text-[11px] font-medium tracking-wide', source.badgeColor)}>
+                              {source.tag}
+                            </span>
+                            {isSelected && (
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/90 text-black">
+                                <Check className="h-3.5 w-3.5 stroke-[3]" />
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="mt-3 text-base font-semibold text-white/95 group-hover:text-white">
+                            {source.name}
+                          </h4>
+                          <p className="mt-1.5 text-xs leading-relaxed text-white/60">
+                            {source.desc}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 border-t border-white/10 pt-3 text-[11px] text-white/40">
+                          {source.id === 'bing'
+                            ? '来源: /api/bing (Bing Archive)'
+                            : source.id === 'acg'
+                              ? '来源: api.aloys23.link/api/v1/image/random/acg'
+                              : '来源: api.aloys23.link/api/v1/image/random/scenery'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-xs text-white/65">
+                  <p className="font-semibold text-white/85">💡 API 特性与自适应说明：</p>
+                  <ul className="mt-2 list-disc space-y-1.5 pl-4 text-white/60">
+                    <li>
+                      <span className="font-medium text-white/80">屏幕方向自适应：</span>
+                      当前客户端自动根据视口比例设定 <code className="rounded bg-white/10 px-1 py-0.5 text-white/80">orientation={activeOrientation}</code>，精准获取最符合当前屏幕比例的壁纸。
+                    </li>
+                    <li>
+                      <span className="font-medium text-white/80">直链与 JSON 双模式：</span>
+                      API 默认 302 重定向到图片直链，可直接用于博客或外链；追加 <code className="rounded bg-white/10 px-1 py-0.5 text-white/80">?type=json</code> 返回结构化 JSON 数据。
+                    </li>
+                    <li>
+                      <span className="font-medium text-white/80">平滑淡入：</span>
+                      切换壁纸或点击“换一张”后，新壁纸在后台预加载解码完成后以 1000ms 电影级平滑交叉淡入呈现。
+                    </li>
+                  </ul>
+                </div>
+              </section>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Search } from 'lucide-react'
 import { getSessionSnapshot, subscribeSession } from '@/api/auth'
 import { updateMySettings } from '@/api/settings'
@@ -16,6 +16,8 @@ import type { SearchEngine, SuggestionStatus } from '@/features/home/types'
 import { openExternalLink } from '@/features/home/url'
 import { LogtoAuth } from '@/components/LogtoAuth'
 
+const emptySubscribe = () => () => {}
+
 export function SearchIsland() {
   return (
     <LogtoAuth>
@@ -25,6 +27,7 @@ export function SearchIsland() {
 }
 
 function SearchContent() {
+  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
   const [query, setQuery] = useState('')
   const [engine, setEngine] = useState<SearchEngine>(() => loadStoredEngine())
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getSessionSnapshot().user))
@@ -42,7 +45,13 @@ function SearchContent() {
   const suggestionListId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const activeEngine = isMounted ? engine : engines[0]
+
   const filteredRecentSearches = useMemo(() => {
+    if (!isMounted) {
+      return []
+    }
+
     const keyword = query.trim().toLowerCase()
     if (!keyword) {
       return recentSearches.slice(0, 4)
@@ -51,7 +60,7 @@ function SearchContent() {
     return recentSearches
       .filter((item) => item.toLowerCase().includes(keyword))
       .slice(0, 4)
-  }, [query, recentSearches])
+  }, [isMounted, query, recentSearches])
 
   useEffect(() => {
     const unsubscribe = subscribeSession((snapshot) => {
@@ -345,14 +354,13 @@ function SearchContent() {
         {/* 真实一体化毛玻璃卡片：始终绝对定位于顶部，输入文字时向下流体式平滑展开 */}
         <div
           className={cn(
-            'cards absolute top-0 right-0 left-0 z-40 w-full rounded-[30px] border border-white/15 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition-[border-color,box-shadow,background-color] duration-300 [--card-hover-scale:1] [--card-active-scale:1]',
-            focused && 'border-white/35 shadow-[0_16px_48px_rgba(0,0,0,0.3)]',
+            'cards absolute top-0 right-0 left-0 z-40 w-full rounded-[30px] border border-white/15 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.35)] transition-[border-color,box-shadow,background-color] duration-300 outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 [--card-hover-scale:1] [--card-active-scale:1]',
             hasSuggestions && 'shadow-[0_24px_60px_rgba(0,0,0,0.5)]',
           )}
         >
           <div className="flex items-stretch gap-3 p-1.5">
             <SearchEngineSelect
-              engine={engine}
+              engine={activeEngine}
               engines={engines}
               showEngineMenu={showEngineMenu}
               onToggle={() => setShowEngineMenu((prev) => !prev)}
@@ -383,8 +391,8 @@ function SearchContent() {
                 }, 160)
               }}
               onKeyDown={onKey}
-              placeholder={`Search with ${engine.name}...`}
-              className="h-14 flex-1 border-none bg-transparent px-4 py-3 text-xl leading-none text-white tracking-wide outline-none placeholder:font-light placeholder:text-white/28"
+              placeholder={`Search with ${activeEngine.name}...`}
+              className="h-14 flex-1 border-none bg-transparent px-4 py-3 text-xl leading-none text-white tracking-wide outline-none placeholder:font-light placeholder:text-white/28 shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
               role="combobox"
               aria-autocomplete="list"
               aria-expanded={hasSuggestions}
@@ -402,7 +410,7 @@ function SearchContent() {
 
             <button
               type="button"
-              className="group/search flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] bg-white/95 text-black shadow-xl transition-all duration-300 hover:scale-110 hover:bg-white active:scale-90"
+              className="group/search flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] bg-white/95 text-black shadow-xl transition-all duration-300 hover:scale-110 hover:bg-white active:scale-90 outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
               onClick={() => handleSearch()}
               aria-label="Search"
             >

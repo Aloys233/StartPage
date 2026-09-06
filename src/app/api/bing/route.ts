@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       {
         code: 500,
         message: 'Failed to fetch Bing wallpaper',
-        url: '/images/background1.jpg',
+        url: null,
       },
       { status: 500 },
     )
