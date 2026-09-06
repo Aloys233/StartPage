@@ -1,0 +1,263 @@
+@import "tailwindcss";
+@import "@fontsource/sora/400.css";
+@import "@fontsource/sora/600.css";
+
+@theme {
+  --color-background: #050510;
+  --color-foreground: #ffffff;
+  --color-border: rgba(255, 255, 255, 0.2);
+  --color-ring: rgba(255, 255, 255, 0.5);
+  --color-popover: rgba(10, 10, 15, 0.85);
+  --color-popover-foreground: #ffffff;
+  --color-accent: rgba(255, 255, 255, 0.15);
+  --color-accent-foreground: #ffffff;
+  --color-muted: rgba(255, 255, 255, 0.1);
+  --color-muted-foreground: rgba(255, 255, 255, 0.6);
+}
+
+@layer base {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #050510;
+    color: #fff;
+    font-family: "HarmonyOS_Regular", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  a:hover {
+    color: rgb(57, 159, 255);
+    text-decoration: underline;
+  }
+
+  input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/*
+ * 核心毛玻璃拟态卡片：严格复刻 home 项目标准规范
+ * 显式书写 -webkit-backdrop-filter 与 backdrop-filter，不依赖 Tailwind 容易失效的变量链
+ */
+.cards {
+  background-color: rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+  transition:
+    scale 0.3s,
+    backdrop-filter 0.3s,
+    -webkit-backdrop-filter 0.3s;
+}
+
+.cards:hover {
+  scale: var(--card-hover-scale, 1.02);
+}
+
+.cards:active {
+  scale: var(--card-active-scale, 0.98);
+}
+
+/*
+ * 全局遮罩毛玻璃：搜索聚焦与抽屉背景
+ */
+.glass-overlay {
+  background-color: rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(16px) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+.glass-modal {
+  background-color: rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/*
+ * 面板切换淡入
+ */
+@keyframes card-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.panel-swap .cards {
+  animation: card-fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 交互栏 / 社交栏 */
+.social-bar {
+  transition:
+    background-color 0.3s,
+    backdrop-filter 0.3s,
+    -webkit-backdrop-filter 0.3s;
+}
+
+.social-bar:hover {
+  background-color: rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* 文本截断 */
+.text-hidden {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* 关键帧动画 */
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-50px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fade {
+  animation: fade 0.4s ease forwards;
+}
+
+.animate-zoom {
+  animation: zoom 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/*
+ * 搜索候选面板流体高度展开/收起动画
+ * 采用现代 CSS Grid (0fr <-> 1fr) 物理缓动方案，使卡片高度平滑过渡且完全自适应内容
+ */
+.search-expand-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: grid-template-rows, opacity;
+}
+
+.search-expand-wrapper.is-expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.search-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/*
+ * 候选建议微滑入与淡入动画：轻盈灵动，作用于内容节点，不干扰祖先滤镜
+ */
+@keyframes suggestion-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-suggestion-in {
+  animation: suggestion-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 兼容 Tailwind-animate / tw-animate 语法 */
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: anim-fade-in;
+}
+
+@keyframes anim-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.slide-in-from-top-1 {
+  animation-name: anim-slide-top-1;
+}
+
+@keyframes anim-slide-top-1 {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.font-clock {
+  font-family: "Sora", "SF Pro Display", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * 二级页面抽屉联动：严禁在祖先容器上使用 opacity < 1 或 transform 动画，
+ * 否则会形成新的 backdrop root 导致后代所有的 .cards 毛玻璃采样失效并闪烁丢失。
+ */
+#home-main-layer {
+  pointer-events: auto;
+}
+
+.secondary-page-open #home-main-layer {
+  pointer-events: none;
+}
