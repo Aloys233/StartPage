@@ -52,6 +52,52 @@ interface TimeHeaderProps {
   dateStr: string
 }
 
+export function TimeHeaderSkeleton() {
+  return (
+    <div
+      className="group relative z-40 mb-[6vh] cursor-default select-none text-center text-white opacity-0 pointer-events-none"
+      aria-hidden="true"
+    >
+      <div className="font-clock flex items-center justify-center text-[clamp(3.2rem,8.5vw,6.8rem)] leading-none tracking-normal font-normal tabular-nums">
+        <div className="inline-flex items-center justify-center shrink-0">
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+        </div>
+        <span className="w-[0.32em] shrink-0 inline-flex items-center justify-center text-center opacity-80 select-none pb-[0.06em]">
+          :
+        </span>
+        <div className="inline-flex items-center justify-center shrink-0">
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+        </div>
+        <span className="w-[0.32em] shrink-0 inline-flex items-center justify-center text-center opacity-80 select-none pb-[0.06em]">
+          :
+        </span>
+        <div className="inline-flex items-center justify-center shrink-0">
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+          <div className="relative inline-flex overflow-hidden h-[1.25em] w-[0.72em] shrink-0 items-center justify-center text-center">
+            <span className="w-full text-center inline-block leading-none">0</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-6 flex items-center justify-center gap-3 text-[clamp(1rem,1.5vw,1.2rem)] font-medium tracking-[0.28em] uppercase">
+        <Calendar className="h-4 w-4 opacity-0" />
+        <span>&nbsp;</span>
+      </div>
+    </div>
+  )
+}
+
 export function TimeHeader({ hour, minute, second, dateStr }: TimeHeaderProps) {
   return (
     <div className="group relative z-40 mb-[6vh] cursor-default select-none text-center text-white animate-fade duration-500">

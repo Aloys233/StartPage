@@ -21,6 +21,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link rel="preconnect" href="https://img.aloys23.link" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://img.aloys23.link" />
+        <link rel="preconnect" href="https://api.aloys23.link" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://api.aloys23.link" />
+        <link rel="preconnect" href="https://cn.bing.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://cn.bing.com" />
+      </head>
       <body className="bg-[#050510] text-white overflow-x-hidden selection:bg-white/30">
         {children}
       </body>

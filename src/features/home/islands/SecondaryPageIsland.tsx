@@ -1,11 +1,24 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { SecondaryPageOverlay } from '@/features/home/components/SecondaryPageOverlay'
-import { SecondaryShortcutDeck } from '@/features/home/components/SecondaryShortcutDeck'
 import { isTypingTarget } from '@/features/home/shortcuts'
 import { AuthIsland } from '@/features/home/islands/AuthIsland'
 import { LogtoAuth } from '@/components/LogtoAuth'
+
+// 延迟加载二级抽屉桌面，跳过服务端渲染，消除首屏数十个跨域 Favicon 的 preload 阻塞
+const SecondaryShortcutDeck = dynamic(
+  () => import('@/features/home/components/SecondaryShortcutDeck').then((m) => m.SecondaryShortcutDeck),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[66vh] min-h-[460px] items-center justify-center text-white/40">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+      </div>
+    ),
+  },
+)
 
 export function SecondaryPageIsland() {
   return (
@@ -17,6 +30,12 @@ export function SecondaryPageIsland() {
 
 function SecondaryPageContent() {
   const [open, setOpen] = useState(false)
+  const [hasEverOpened, setHasEverOpened] = useState(false)
+
+  const openSecondaryPage = () => {
+    setHasEverOpened(true)
+    setOpen(true)
+  }
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -49,7 +68,7 @@ function SecondaryPageContent() {
       event.stopPropagation()
 
       if (!open) {
-        setOpen(true)
+        openSecondaryPage()
       }
     }
 
@@ -62,7 +81,7 @@ function SecondaryPageContent() {
       event.stopPropagation()
 
       if (!open) {
-        setOpen(true)
+        openSecondaryPage()
       }
     }
 
@@ -92,7 +111,7 @@ function SecondaryPageContent() {
 
   return (
     <SecondaryPageOverlay open={open} onClose={() => setOpen(false)} authSlot={<AuthIsland />}>
-      <SecondaryShortcutDeck />
+      {open || hasEverOpened ? <SecondaryShortcutDeck /> : null}
     </SecondaryPageOverlay>
   )
 }
