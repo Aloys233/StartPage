@@ -18,6 +18,7 @@ import { getShortcutIcon } from '@/features/home/shortcuts'
 import { secondaryShortcutCategories } from '@/features/home/secondaryShortcuts'
 import { buildFaviconUrl, getHostname, openExternalLink } from '@/features/home/url'
 import {
+  DEFAULT_WALLPAPER_SOURCE,
   getStoredWallpaperSource,
   setStoredWallpaperSource,
   triggerWallpaperRefresh,
@@ -53,7 +54,7 @@ export function SecondaryShortcutDeck() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const orientation = useSyncExternalStore(subscribeResize, getOrientationSnapshot, getOrientationServerSnapshot)
 
-  const activeSource = isMounted ? currentSource : 'acg'
+  const activeSource = isMounted ? currentSource : DEFAULT_WALLPAPER_SOURCE
   const activeOrientation = isMounted ? orientation : 'horizontal'
 
   const totalPages = secondaryShortcutCategories.length + 2

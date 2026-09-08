@@ -2,6 +2,7 @@ export type WallpaperSource = 'bing' | 'acg' | 'scenery'
 
 export const WALLPAPER_SOURCE_KEY = 'startpage_wallpaper_source'
 export const WALLPAPER_PREFETCH_KEY_PREFIX = 'startpage_next_wallpaper_'
+export const DEFAULT_WALLPAPER_SOURCE: WallpaperSource = 'bing'
 
 export interface WallpaperSourceOption {
   id: WallpaperSource
@@ -41,7 +42,7 @@ export const getScreenOrientation = (): 'horizontal' | 'vertical' => {
 }
 
 export const getStoredWallpaperSource = (): WallpaperSource => {
-  if (typeof window === 'undefined') return 'acg'
+  if (typeof window === 'undefined') return DEFAULT_WALLPAPER_SOURCE
   try {
     const val = localStorage.getItem(WALLPAPER_SOURCE_KEY)
     if (val === 'bing' || val === 'acg' || val === 'scenery') {
@@ -50,7 +51,7 @@ export const getStoredWallpaperSource = (): WallpaperSource => {
   } catch {
     // Ignore storage read error
   }
-  return 'acg'
+  return DEFAULT_WALLPAPER_SOURCE
 }
 
 export const setStoredWallpaperSource = (source: WallpaperSource) => {

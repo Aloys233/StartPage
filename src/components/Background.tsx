@@ -3,6 +3,7 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
+  DEFAULT_WALLPAPER_SOURCE,
   fetchWallpaperUrl,
   getStoredWallpaperSource,
   type WallpaperSource,
@@ -62,7 +63,7 @@ export function Background() {
     // 监听壁纸源变更与刷新通知
     const onSourceChange = (event: Event) => {
       const customEvent = event as CustomEvent<{ source?: WallpaperSource }>
-      const newSource = customEvent.detail?.source || 'acg'
+      const newSource = customEvent.detail?.source || DEFAULT_WALLPAPER_SOURCE
       void loadWallpaper(newSource)
     }
 
