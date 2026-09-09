@@ -19,10 +19,12 @@ import { secondaryShortcutCategories } from '@/features/home/secondaryShortcuts'
 import { buildFaviconUrl, getHostname, openExternalLink } from '@/features/home/url'
 import {
   DEFAULT_WALLPAPER_SOURCE,
+  getScreenOrientation,
   getStoredWallpaperSource,
   setStoredWallpaperSource,
   triggerWallpaperRefresh,
   WALLPAPER_SOURCES,
+  type ScreenOrientation,
   type WallpaperSource,
 } from '@/features/home/wallpaper'
 import { cn } from '@/lib/utils'
@@ -41,10 +43,9 @@ const subscribeResize = (onStoreChange: () => void) => {
   return () => window.removeEventListener('resize', onStoreChange)
 }
 
-const getOrientationSnapshot = () =>
-  typeof window !== 'undefined' && window.innerWidth >= window.innerHeight ? 'horizontal' : 'vertical'
+const getOrientationSnapshot = (): ScreenOrientation => getScreenOrientation()
 
-const getOrientationServerSnapshot = () => 'horizontal' as const
+const getOrientationServerSnapshot = (): ScreenOrientation => 'landscape'
 
 export function SecondaryShortcutDeck() {
   const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
@@ -55,7 +56,7 @@ export function SecondaryShortcutDeck() {
   const orientation = useSyncExternalStore(subscribeResize, getOrientationSnapshot, getOrientationServerSnapshot)
 
   const activeSource = isMounted ? currentSource : DEFAULT_WALLPAPER_SOURCE
-  const activeOrientation = isMounted ? orientation : 'horizontal'
+  const activeOrientation = isMounted ? orientation : 'landscape'
 
   const totalPages = secondaryShortcutCategories.length + 2
   const maxPageIndex = totalPages - 1
@@ -343,7 +344,7 @@ export function SecondaryShortcutDeck() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[11px] text-white/70">
-                      方向适配: {activeOrientation === 'horizontal' ? '横屏 (horizontal)' : '竖屏 (vertical)'}
+                      方向适配: {activeOrientation === 'landscape' ? '横屏 (landscape)' : '竖屏 (portrait)'}
                     </span>
                     <button
                       type="button"
@@ -409,7 +410,7 @@ export function SecondaryShortcutDeck() {
                   <ul className="mt-2 list-disc space-y-1.5 pl-4 text-white/60">
                     <li>
                       <span className="font-medium text-white/80">屏幕方向自适应：</span>
-                      当前客户端自动根据视口比例设定 <code className="rounded bg-white/10 px-1 py-0.5 text-white/80">orientation={activeOrientation}</code>，精准获取最符合当前屏幕比例的壁纸。
+                      当前客户端自动根据视口比例设定 <code className="rounded bg-white/10 px-1 py-0.5 text-white/80">orientation={activeOrientation}</code>（横屏 landscape / 竖屏 portrait），精准获取最符合当前屏幕比例的壁纸。
                     </li>
                     <li>
                       <span className="font-medium text-white/80">直链与 JSON 双模式：</span>

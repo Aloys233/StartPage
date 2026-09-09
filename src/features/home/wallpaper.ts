@@ -36,9 +36,11 @@ export const WALLPAPER_SOURCES: WallpaperSourceOption[] = [
   },
 ]
 
-export const getScreenOrientation = (): 'horizontal' | 'vertical' => {
-  if (typeof window === 'undefined') return 'horizontal'
-  return window.innerWidth >= window.innerHeight ? 'horizontal' : 'vertical'
+export type ScreenOrientation = 'landscape' | 'portrait'
+
+export const getScreenOrientation = (): ScreenOrientation => {
+  if (typeof window === 'undefined') return 'landscape'
+  return window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait'
 }
 
 export const getStoredWallpaperSource = (): WallpaperSource => {
@@ -72,7 +74,7 @@ export const triggerWallpaperRefresh = () => {
 interface StoredPrefetchedItem {
   url: string
   source: WallpaperSource
-  orientation: 'horizontal' | 'vertical'
+  orientation: ScreenOrientation
   timestamp: number
 }
 
@@ -118,7 +120,7 @@ export function consumeStoredPrefetchedWallpaper(source: WallpaperSource): strin
 export function saveStoredPrefetchedWallpaper(
   source: WallpaperSource,
   url: string,
-  orientation: 'horizontal' | 'vertical',
+  orientation: ScreenOrientation,
 ): void {
   if (typeof window === 'undefined' || !url) return
   try {
@@ -154,7 +156,7 @@ export function preloadImageResource(url: string): Promise<boolean> {
 // 从 API 获取真实图片直链
 export async function fetchRawWallpaperUrl(
   source: WallpaperSource,
-  orientation: 'horizontal' | 'vertical' = getScreenOrientation(),
+  orientation: ScreenOrientation = getScreenOrientation(),
 ): Promise<string | null> {
   try {
     if (source === 'acg') {
