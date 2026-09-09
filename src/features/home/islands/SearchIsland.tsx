@@ -120,6 +120,11 @@ function SearchContent() {
         return
       }
 
+      if (event.key === 'Escape' && showEngineMenu) {
+        setShowEngineMenu(false)
+        return
+      }
+
       const isFocusShortcut =
         event.key === '/' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k')
 
@@ -142,7 +147,7 @@ function SearchContent() {
         window.clearTimeout(blurTimeoutRef.current)
       }
     }
-  }, [query])
+  }, [query, showEngineMenu])
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -322,7 +327,7 @@ function SearchContent() {
       <div
         className={cn(
           'pointer-events-none fixed inset-0 z-20 transition-[opacity,backdrop-filter] duration-300 ease-out',
-          focused || showSuggestions
+          focused || showSuggestions || showEngineMenu
             ? 'opacity-100 backdrop-blur-md [-webkit-backdrop-filter:blur(12px)]'
             : 'opacity-0 backdrop-blur-none [-webkit-backdrop-filter:none]',
         )}
@@ -363,7 +368,16 @@ function SearchContent() {
               engine={activeEngine}
               engines={engines}
               showEngineMenu={showEngineMenu}
-              onToggle={() => setShowEngineMenu((prev) => !prev)}
+              portalContainer={containerRef.current}
+              onToggle={() => {
+                setShowEngineMenu((prev) => {
+                  const next = !prev
+                  if (next) {
+                    setShowSuggestions(false)
+                  }
+                  return next
+                })
+              }}
               onSelect={(item) => {
                 setEngine(item)
                 setShowEngineMenu(false)
@@ -375,6 +389,7 @@ function SearchContent() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onFocus={() => {
+                setShowEngineMenu(false)
                 if (blurTimeoutRef.current !== null) {
                   window.clearTimeout(blurTimeoutRef.current)
                   blurTimeoutRef.current = null
