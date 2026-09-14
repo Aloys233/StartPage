@@ -177,8 +177,15 @@ export async function fetchRawWallpaperUrl(
       return data.url || null
     }
 
-    // 默认 bing：走服务端代理避开跨域
-    const res = await fetch('/api/bing')
+    if (source === 'bing') {
+      const res = await fetch('https://api.aloys23.link/api/v1/image/bing?type=url')
+      if (!res.ok) throw new Error(`Bing wallpaper request failed: ${res.status}`)
+      const data = await res.json()
+      return data.url || null
+    }
+
+    // 默认 bing
+    const res = await fetch('https://api.aloys23.link/api/v1/image/bing?type=url')
     if (!res.ok) throw new Error(`Bing wallpaper request failed: ${res.status}`)
     const data = await res.json()
     return data.url || null

@@ -395,7 +395,7 @@ export function SecondaryShortcutDeck() {
 
                         <div className="mt-4 border-t border-white/10 pt-3 text-[11px] text-white/40">
                           {source.id === 'bing'
-                            ? '来源: /api/bing (Bing Archive)'
+                            ? '来源: api.aloys23.link/api/v1/image/bing'
                             : source.id === 'acg'
                               ? '来源: api.aloys23.link/api/v1/image/random/acg'
                               : '来源: api.aloys23.link/api/v1/image/random/scenery'}

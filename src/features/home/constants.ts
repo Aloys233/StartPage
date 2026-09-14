@@ -79,7 +79,7 @@ export const engines: SearchEngine[] = [
 
 export const FALLBACK_ENGINES = engines.slice(0, 4)
 
-export const WALLPAPER_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN'
-export const WALLPAPER_BASE = 'https://cn.bing.com'
+export const WALLPAPER_API = 'https://api.aloys23.link/api/v1/image/bing'
+export const WALLPAPER_BASE = 'https://api.aloys23.link'
 export const WALLPAPER_FALLBACK =
   'radial-gradient(circle at 18% 18%, rgba(95, 121, 201, 0.42), transparent 42%), radial-gradient(circle at 78% 8%, rgba(52, 101, 179, 0.36), transparent 35%), linear-gradient(145deg, #0d1428 0%, #101f3d 48%, #0a1429 100%)'

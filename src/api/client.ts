@@ -61,7 +61,7 @@ const parseErrorPayload = (value: unknown): Partial<ErrorResponse> | null => {
   return null
 }
 
-const isInternalRoute = (path: string) => path.startsWith('/api/bing')
+const isInternalRoute = (path: string) => path.startsWith('/api/')
 
 const buildUrl = (path: string, query?: Record<string, string | number | boolean | undefined>) => {
   const isInternal = isInternalRoute(path)
