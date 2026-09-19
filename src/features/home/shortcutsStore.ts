@@ -605,6 +605,9 @@ const syncFromServer = async () => {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isUuid = (value: string) => UUID_REGEX.test(value)
 
+/** 种子项/旧数据的 id 不可信，判断「是不是同一条快捷方式」只能靠内容 */
+const contentKey = (item: Pick<ShortcutItem, 'title' | 'url'>) => `${item.title}\u0000${item.url}`
+
 /**
  * 游客 → 首次登录：把设备上的匿名快捷方式并入账号。
  *
@@ -621,13 +624,33 @@ async function mergeGuestShortcutsIntoAccount(): Promise<void> {
     return
   }
 
+  // 内置默认项的 id 形如 default-1，不是合法 UUID，必须换成客户端 UUID 才能入队。
+  // 这个合并会在每次登录/刷新时重跑（模块状态不跨刷新保留），所以生成的 id
+  // 必须立刻写回游客缓存：否则每次都会产出新的 UUID，后端按 id upsert 时
+  // 认不出是同一批数据，于是把整份游客列表重复插进账号 —— 刷新一次多一排。
+  const accountIdByContent = new Map(items.map((item) => [contentKey(item), item.id]))
+  let guestCacheRewritten = false
+  const normalizedGuestItems = guestItems.map((item) => {
+    if (isUuid(item.id)) {
+      return item
+    }
+    // 账号里已有同内容的条目（旧版本已经把这批种子数据导入过）：直接沿用它的 id，
+    // 不要再插一条。否则清理完数据库里的重复行后，第一次登录又会多出一排。
+    const id = accountIdByContent.get(contentKey(item)) ?? createLocalId()
+    guestCacheRewritten = true
+    return { ...item, id }
+  })
+
+  if (guestCacheRewritten) {
+    writeJson(dataKey(GUEST_SCOPE), normalizedGuestItems)
+  }
+
   const knownIds = new Set(items.map((item) => item.id))
-  const ops: ShortcutQueueOp[] = guestItems
+  const ops: ShortcutQueueOp[] = normalizedGuestItems
     .filter((item) => !knownIds.has(item.id))
     .map((item) => ({
       type: 'create' as const,
-      // 内置默认项的 id 形如 default-1，不是合法 UUID，必须重新生成
-      id: isUuid(item.id) ? item.id : createLocalId(),
+      id: item.id,
       title: item.title,
       url: item.url,
       icon: item.icon,
