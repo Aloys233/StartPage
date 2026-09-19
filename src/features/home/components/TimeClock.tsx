@@ -1,27 +1,24 @@
-"use client"
+'use client'
 
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { TimeHeader, TimeHeaderSkeleton } from '@/features/home/components/TimeHeader'
+import { useIsMounted } from '@/lib/useIsMounted'
 
-const emptySubscribe = () => () => {}
-
-export function TimeIsland() {
-  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
+export function TimeClock() {
+  const isMounted = useIsMounted()
   const [time, setTime] = useState<Date>(() => new Date())
 
   useEffect(() => {
     let timerId: number
 
+    // 对齐到整秒边界刷新，避免 setInterval 累积漂移
     const tick = () => {
       const now = new Date()
       setTime(now)
-      const delay = 1000 - now.getMilliseconds()
-      timerId = window.setTimeout(tick, delay)
+      timerId = window.setTimeout(tick, 1000 - now.getMilliseconds())
     }
 
-    const now = new Date()
-    const initialDelay = 1000 - now.getMilliseconds()
-    timerId = window.setTimeout(tick, initialDelay)
+    timerId = window.setTimeout(tick, 1000 - new Date().getMilliseconds())
 
     return () => {
       window.clearTimeout(timerId)
@@ -30,7 +27,7 @@ export function TimeIsland() {
 
   if (!isMounted) {
     return (
-      <div suppressHydrationWarning className="flex flex-col items-center">
+      <div className="flex flex-col items-center">
         <TimeHeaderSkeleton />
       </div>
     )

@@ -1,10 +1,5 @@
 import type { ErrorResponse, UserProfile } from '@/features/home/types'
-
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.PUBLIC_API_BASE_URL ??
-  ''
-).replace(/\/$/, '')
+import { API_BASE_URL } from '@/lib/env'
 
 export class ApiError extends Error {
   readonly status: number
@@ -65,13 +60,14 @@ const isInternalRoute = (path: string) => path.startsWith('/api/')
 
 const buildUrl = (path: string, query?: Record<string, string | number | boolean | undefined>) => {
   const isInternal = isInternalRoute(path)
-  const baseUrl = isInternal ? '' : API_BASE_URL
-
-  const url = baseUrl
-    ? new URL(path, `${baseUrl}/`)
+  // 内部接口直连后端 API 源；其余（第三方）走当前站点源
+  const baseUrl = isInternal
+    ? API_BASE_URL
     : typeof window !== 'undefined'
-      ? new URL(path, window.location.origin)
-      : new URL(path, 'http://localhost:3000')
+      ? window.location.origin
+      : 'http://localhost:3000'
+
+  const url = new URL(path, `${baseUrl}/`)
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -80,11 +76,7 @@ const buildUrl = (path: string, query?: Record<string, string | number | boolean
     })
   }
 
-  if (baseUrl) {
-    return url.toString()
-  }
-
-  return `${url.pathname}${url.search}`
+  return url.toString()
 }
 
 const parseResponse = async <T>(response: Response): Promise<T> => {

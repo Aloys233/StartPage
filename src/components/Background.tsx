@@ -2,6 +2,7 @@
 
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { WALLPAPER_FALLBACK } from '@/features/home/constants'
 import {
   DEFAULT_WALLPAPER_SOURCE,
   fetchWallpaperUrl,
@@ -22,7 +23,6 @@ export function Background() {
 
   const currentBgRef = useRef(currentBg)
   const nextBgRef = useRef(nextBg)
-  const isTransitioningRef = useRef(false)
   const fallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -47,12 +47,10 @@ export function Background() {
         }
 
         // 放入过渡图层，初始保持 opacity-0，等待图片在浏览器中完全加载就绪后立即淡入
-        isTransitioningRef.current = true
         setIsNextReady(false)
         setNextBg(url)
       } catch (e) {
-        console.warn(`获取壁纸失败 (${source})，保持深色背景:`, e)
-        isTransitioningRef.current = false
+        console.warn(`获取壁纸失败 (${source})，保持渐变兜底背景:`, e)
       }
     }
 
@@ -101,7 +99,6 @@ export function Background() {
             setCurrentBg(nextBgRef.current)
             setNextBg(null)
             setIsNextReady(false)
-            isTransitioningRef.current = false
           }
         }, FADE_TRANSITION_MS + 60)
       })
@@ -112,7 +109,6 @@ export function Background() {
   const handleNextImageError = () => {
     setNextBg(null)
     setIsNextReady(false)
-    isTransitioningRef.current = false
   }
 
   // CSS 过渡动画自然结束事件响应
@@ -125,12 +121,14 @@ export function Background() {
       setCurrentBg(nextBg)
       setNextBg(null)
       setIsNextReady(false)
-      isTransitioningRef.current = false
     }
   }
 
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden select-none z-0">
+      {/* 壁纸未就绪或拉取失败时的渐变兜底，避免整页呈现纯黑 */}
+      <div className="absolute inset-0 w-full h-full" style={{ backgroundImage: WALLPAPER_FALLBACK }} />
+
       {/* 基础底图图层（稳定显示层） */}
       {currentBg && (
         // eslint-disable-next-line @next/next/no-img-element

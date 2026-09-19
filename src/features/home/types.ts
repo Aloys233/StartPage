@@ -10,8 +10,6 @@ export type SearchEngineId =
   | 'bilibili'
   | 'youtube'
 
-export type SuggestionEngineId = 'google' | 'bing' | 'baidu' | 'duckduckgo' | 'youtube'
-
 export interface SearchEngine {
   id: SearchEngineId
   name: string
@@ -40,27 +38,6 @@ export interface UserProfile {
   createdAt: string
 }
 
-export interface TokenPair {
-  accessToken: string
-  refreshToken: string
-  tokenType: string
-  expiresIn: number
-}
-
-export interface AuthResponse extends TokenPair {
-  user: UserProfile
-}
-
-export interface RegisterRequest {
-  email: string
-  password: string
-}
-
-export interface LoginRequest {
-  email: string
-  password: string
-}
-
 export interface ShortcutItem {
   id: string
   title: string
@@ -71,24 +48,30 @@ export interface ShortcutItem {
   updatedAt: string
 }
 
-export interface ShortcutDraft {
-  title: string
-  url: string
-  icon?: string
-}
-
-export interface ReplaceShortcutItem extends ShortcutDraft {
-  id?: string
-  sortOrder?: number
-}
-
 export interface ShortcutListResponse {
   items: ShortcutItem[]
   updatedAt: string
+  /** 乐观并发凭证：每次写操作自增，写请求必须带上已知值 */
+  revision: number
+  /** 相对请求中 since 参数而言被删除的 id，用于增量对账 */
+  deletedIds: string[]
 }
 
 export interface ReorderShortcutsRequest {
   ids: string[]
+}
+
+/** 离线操作队列中的一条待同步操作。create 带客户端生成的 id，因此重放是幂等的。 */
+export type ShortcutQueueOp =
+  | { type: 'create'; id: string; title: string; url: string; icon: string }
+  | { type: 'update'; id: string; title: string; url: string; icon: string }
+  | { type: 'delete'; id: string }
+  | { type: 'reorder'; ids: string[] }
+
+/** 登录用户的同步元数据，持久化在 localStorage */
+export interface ShortcutSyncDoc {
+  revision: number
+  pendingOps: ShortcutQueueOp[]
 }
 
 export interface UserSettings {
@@ -102,15 +85,4 @@ export interface UpdateSettingsRequest {
   locale?: string
 }
 
-export interface SuggestionResponse {
-  q: string
-  engine: SuggestionEngineId
-  items: string[]
-}
-
 export type SuggestionStatus = 'idle' | 'loading' | 'ready'
-
-export interface ShortcutsBootstrap {
-  hasStoredValue: boolean
-  shortcuts: ShortcutItem[]
-}

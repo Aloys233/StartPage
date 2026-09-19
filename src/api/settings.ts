@@ -1,6 +1,7 @@
 import type { UpdateSettingsRequest, UserSettings } from '@/features/home/types'
 import { request } from './client'
 
+/** 读取云端偏好；后端在没有记录时返回默认值（google / zh-CN）。 */
 export const getMySettings = () =>
   request<UserSettings>('/api/me/settings', {
     method: 'GET',

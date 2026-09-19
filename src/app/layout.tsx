@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next'
+import { LogtoAuth } from '@/components/LogtoAuth'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Start',
   description: 'A clean and elegant personal start page',
   icons: {
-    icon: '/vite.svg',
+    icon: '/favicon.svg',
   },
 }
 
@@ -16,9 +17,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
     <html lang="zh-CN">
       <head>
@@ -35,7 +36,8 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#050510] text-white overflow-x-hidden selection:bg-white/30">
-        {children}
+        {/* 全站唯一的 Logto Provider，杜绝各 island 重复挂载导致的多次 /api/me 请求 */}
+        <LogtoAuth>{children}</LogtoAuth>
       </body>
     </html>
   )

@@ -1,7 +1,9 @@
-import { SearchIsland } from '@/features/home/islands/SearchIsland'
-import { SecondaryPageIsland } from '@/features/home/islands/SecondaryPageIsland'
-import { ShortcutsIsland } from '@/features/home/islands/ShortcutsIsland'
-import { TimeIsland } from '@/features/home/islands/TimeIsland'
+import { AuthMenu } from '@/features/home/components/AuthMenu'
+import { SearchBar } from '@/features/home/components/SearchBar'
+import { SecondaryPage } from '@/features/home/components/SecondaryPage'
+import { ShortcutsSection } from '@/features/home/components/ShortcutsSection'
+import { SyncStatusBar } from '@/features/home/components/SyncStatusBar'
+import { TimeClock } from '@/features/home/components/TimeClock'
 import { Background } from '@/components/Background'
 
 export default function HomePage() {
@@ -15,13 +17,21 @@ export default function HomePage() {
         id="home-main-layer"
         className="relative z-10 flex min-h-screen flex-col items-center px-6 pt-[8vh]"
       >
-        <TimeIsland />
-        <SearchIsland />
-        <ShortcutsIsland />
+        {/* 右上角常驻账户入口，与二级抽屉 authSlot 保持同一位置，展开时无缝接管 */}
+        <div className="absolute top-6 right-6 z-20">
+          <AuthMenu />
+        </div>
+
+        <TimeClock />
+        <SearchBar />
+        <ShortcutsSection />
       </main>
 
       {/* 二级桌面抽屉组件 */}
-      <SecondaryPageIsland />
+      <SecondaryPage />
+
+      {/* 同步状态条：只挂一次（ShortcutsSection 在首页与抽屉各有一份实例） */}
+      <SyncStatusBar />
     </div>
   )
 }

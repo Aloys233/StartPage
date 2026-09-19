@@ -2,35 +2,41 @@ import type { ShortcutItem } from '@/features/home/types'
 import {
   ENGINE_STORAGE_KEY,
   engines,
+  GUEST_SCOPE,
   MAX_SEARCH_HISTORY,
+  MAX_SHORTCUT_TITLE_LENGTH,
   SEARCH_HISTORY_STORAGE_KEY,
-  SHORTCUT_STORAGE_KEY,
+  SHORTCUTS_DATA_KEY_PREFIX,
   SHORTCUTS_MIGRATION_FLAG_KEY,
   SHORTCUTS_STORAGE_BACKUP_KEY,
   SHORTCUTS_STORAGE_RECOVERY_KEY,
   SHORTCUTS_STORAGE_RECOVERY_PREV_KEY,
+  SHORTCUT_STORAGE_KEY,
 } from './constants'
-import type { SearchEngine, ShortcutsBootstrap } from './types'
+import type { SearchEngine } from './types'
 import { normalizeUrl } from './url'
+import { createLocalId } from '@/lib/id'
 
-const SHORTCUT_STORAGE_SCHEMA_VERSION = 2
 const MAX_STORED_SHORTCUTS = 100
-const MAX_SHORTCUT_TITLE_LENGTH = 120
 const MAX_SHORTCUT_URL_LENGTH = 2048
 const MAX_SHORTCUT_ICON_LENGTH = 2048
 
-interface StoredShortcut {
+/** 旧版快捷键存储键，迁移后全部清除 */
+const LEGACY_SHORTCUT_STORAGE_KEYS = [
+  SHORTCUT_STORAGE_KEY,
+  SHORTCUTS_STORAGE_BACKUP_KEY,
+  SHORTCUTS_STORAGE_RECOVERY_KEY,
+  SHORTCUTS_STORAGE_RECOVERY_PREV_KEY,
+]
+
+interface LegacyShortcut {
   id: string
   title: string
   url: string
   icon: string
 }
 
-interface ParsedShortcutPayload {
-  items: StoredShortcut[]
-  rawCount: number
-  needsRewrite: boolean
-}
+/* ---------- localStorage 安全封装 ---------- */
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object')
@@ -67,19 +73,12 @@ const safeLocalStorageRemove = (key: string) => {
   }
 }
 
-const createShortcutId = (seed: number): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
+/* ---------- 旧数据解析 ---------- */
 
-  return `local-${Date.now()}-${seed}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-const normalizeStoredShortcut = (
+const normalizeLegacyShortcut = (
   value: unknown,
-  index: number,
   seenIds: Set<string>,
-): StoredShortcut | null => {
+): LegacyShortcut | null => {
   if (!isRecord(value)) {
     return null
   }
@@ -106,39 +105,17 @@ const normalizeStoredShortcut = (
   const normalizedIcon = rawIcon ? normalizeUrl(rawIcon) ?? '' : ''
 
   const candidateId = typeof value.id === 'string' ? value.id.trim() : ''
-  let id = candidateId || createShortcutId(index)
+  let id = candidateId || createLocalId()
   while (seenIds.has(id)) {
-    id = createShortcutId(index + seenIds.size)
+    id = createLocalId()
   }
   seenIds.add(id)
 
-  return {
-    id,
-    title,
-    url: normalizedUrl,
-    icon: normalizedIcon,
-  }
+  return { id, title, url: normalizedUrl, icon: normalizedIcon }
 }
 
-const normalizeShortcutList = (items: unknown[]): StoredShortcut[] => {
-  const normalized: StoredShortcut[] = []
-  const seenIds = new Set<string>()
-
-  for (let index = 0; index < items.length; index += 1) {
-    if (normalized.length >= MAX_STORED_SHORTCUTS) {
-      break
-    }
-
-    const item = normalizeStoredShortcut(items[index], index, seenIds)
-    if (item) {
-      normalized.push(item)
-    }
-  }
-
-  return normalized
-}
-
-const parseShortcutPayload = (raw: string): ParsedShortcutPayload | null => {
+/** 兼容两种历史格式：裸数组，以及 { version, items } 信封 */
+const parseLegacyShortcutItems = (raw: string): LegacyShortcut[] | null => {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -146,120 +123,78 @@ const parseShortcutPayload = (raw: string): ParsedShortcutPayload | null => {
     return null
   }
 
-  if (Array.isArray(parsed)) {
-    const items = normalizeShortcutList(parsed)
-    return {
-      items,
-      rawCount: parsed.length,
-      needsRewrite: true,
-    }
-  }
+  const rawItems = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.items)
+      ? parsed.items
+      : null
 
-  if (!isRecord(parsed) || !Array.isArray(parsed.items)) {
+  if (!rawItems) {
     return null
   }
 
-  const rawItems = parsed.items
-  const items = normalizeShortcutList(rawItems)
-  const version = typeof parsed.version === 'number' ? parsed.version : 0
-  const needsRewrite =
-    version !== SHORTCUT_STORAGE_SCHEMA_VERSION ||
-    rawItems.length !== items.length ||
-    rawItems.length > MAX_STORED_SHORTCUTS
+  const items: LegacyShortcut[] = []
+  const seenIds = new Set<string>()
 
-  return {
-    items,
-    rawCount: rawItems.length,
-    needsRewrite,
+  for (let index = 0; index < rawItems.length; index += 1) {
+    if (items.length >= MAX_STORED_SHORTCUTS) {
+      break
+    }
+    const item = normalizeLegacyShortcut(rawItems[index], seenIds)
+    if (item) {
+      items.push(item)
+    }
   }
+
+  return items
 }
 
-const serializeShortcutPayload = (items: StoredShortcut[]) =>
-  JSON.stringify({
-    version: SHORTCUT_STORAGE_SCHEMA_VERSION,
-    updatedAt: new Date().toISOString(),
-    items,
-  })
-
-const persistShortcutPayload = (items: StoredShortcut[]) => {
-  const payload = serializeShortcutPayload(items)
-  const previousPrimary = safeLocalStorageGet(SHORTCUT_STORAGE_KEY)
-  if (previousPrimary !== null) {
-    safeLocalStorageSet(SHORTCUTS_STORAGE_RECOVERY_PREV_KEY, previousPrimary)
-  }
-
-  const wrotePrimary = safeLocalStorageSet(SHORTCUT_STORAGE_KEY, payload)
-  if (wrotePrimary) {
-    safeLocalStorageSet(SHORTCUTS_STORAGE_RECOVERY_KEY, payload)
-  }
-}
-
-const toGuestShortcuts = (items: StoredShortcut[]): ShortcutItem[] => {
-  const now = new Date().toISOString()
-  return items.map((item, index) => ({
-    id: item.id,
-    title: item.title,
-    url: item.url,
-    icon: item.icon,
-    sortOrder: index,
-    createdAt: now,
-    updatedAt: now,
-  }))
-}
-
-const toStoredShortcutInput = (shortcuts: ShortcutItem[]) =>
-  shortcuts.map(({ id, title, url, icon }) => ({ id, title, url, icon }))
-
-export const loadStoredShortcuts = (): ShortcutsBootstrap => {
-  if (typeof window === 'undefined') {
-    return { hasStoredValue: false, shortcuts: [] }
-  }
-
-  const candidatePayloads: Array<{ key: string; raw: string | null }> = [
-    { key: SHORTCUT_STORAGE_KEY, raw: safeLocalStorageGet(SHORTCUT_STORAGE_KEY) },
-    { key: SHORTCUTS_STORAGE_RECOVERY_KEY, raw: safeLocalStorageGet(SHORTCUTS_STORAGE_RECOVERY_KEY) },
-    { key: SHORTCUTS_STORAGE_RECOVERY_PREV_KEY, raw: safeLocalStorageGet(SHORTCUTS_STORAGE_RECOVERY_PREV_KEY) },
-    { key: SHORTCUTS_STORAGE_BACKUP_KEY, raw: safeLocalStorageGet(SHORTCUTS_STORAGE_BACKUP_KEY) },
-  ]
-
-  for (const payload of candidatePayloads) {
-    if (payload.raw === null) {
-      continue
-    }
-
-    const parsed = parseShortcutPayload(payload.raw)
-    if (!parsed) {
-      continue
-    }
-
-    const hasRecoverableData = parsed.rawCount === 0 || parsed.items.length > 0
-    if (!hasRecoverableData) {
-      continue
-    }
-
-    if (payload.key !== SHORTCUT_STORAGE_KEY || parsed.needsRewrite) {
-      persistShortcutPayload(parsed.items)
-    }
-
-    return { hasStoredValue: true, shortcuts: toGuestShortcuts(parsed.items) }
-  }
-
-  return { hasStoredValue: false, shortcuts: [] }
-}
-
-export const saveStoredShortcuts = (shortcuts: ShortcutItem[]) => {
+/**
+ * 一次性迁移旧版快捷键存储。
+ *
+ * 旧实现把同一个 key 兼作「游客数据 / 登录用户缓存 / 迁移源」三种语义，
+ * 并用 primary + recovery + recovery-prev + backup 四键互相回退 —— 后者正是
+ * "已删除数据静默复活"的根源。这里只读一次主键，然后无条件清除全部旧键。
+ *
+ * 注意只迁移到 guest scope：登录用户的本地数据由 store 在拿到账号后以
+ * merge（逐条 create，客户端 UUID 幂等）方式并入，绝不使用全量替换。
+ */
+export function migrateLegacyShortcutStorage(): void {
   if (typeof window === 'undefined') {
     return
   }
 
-  const storedItems = normalizeShortcutList(toStoredShortcutInput(shortcuts))
-  if (shortcuts.length > 0 && storedItems.length === 0) {
-    console.error('Skip persisting shortcuts because all entries are invalid')
-    return
+  try {
+    const guestKey = `${SHORTCUTS_DATA_KEY_PREFIX}${GUEST_SCOPE}`
+    const alreadyMigrated = window.localStorage.getItem(guestKey) !== null
+
+    if (!alreadyMigrated) {
+      const legacyRaw = safeLocalStorageGet(SHORTCUT_STORAGE_KEY)
+      const legacyItems = legacyRaw ? parseLegacyShortcutItems(legacyRaw) : null
+
+      if (legacyItems && legacyItems.length > 0) {
+        const now = new Date().toISOString()
+        const items: ShortcutItem[] = legacyItems.map((item, index) => ({
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          icon: item.icon,
+          sortOrder: index,
+          createdAt: now,
+          updatedAt: now,
+        }))
+        window.localStorage.setItem(guestKey, JSON.stringify(items))
+      }
+    }
+  } catch (error) {
+    console.error('Failed to migrate legacy shortcut storage', error)
   }
 
-  persistShortcutPayload(storedItems)
+  LEGACY_SHORTCUT_STORAGE_KEYS.forEach(safeLocalStorageRemove)
+  safeLocalStorageRemove(SHORTCUTS_MIGRATION_FLAG_KEY)
 }
+
+/* ---------- 搜索引擎 ---------- */
 
 export const loadStoredEngine = (): SearchEngine => {
   if (typeof window === 'undefined') {
@@ -281,6 +216,8 @@ export const saveStoredEngine = (engineId: string) => {
 
   safeLocalStorageSet(ENGINE_STORAGE_KEY, engineId)
 }
+
+/* ---------- 搜索历史 ---------- */
 
 export const loadSearchHistory = (): string[] => {
   if (typeof window === 'undefined') {
@@ -310,81 +247,4 @@ export const saveSearchHistory = (history: string[]) => {
   }
 
   safeLocalStorageSet(SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
-}
-
-const buildMigrationFlagKey = (userId: string) => `${SHORTCUTS_MIGRATION_FLAG_KEY}:${userId}`
-
-export const hasMigratedShortcuts = (userId?: string): boolean => {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  if (!userId) {
-    return safeLocalStorageGet(SHORTCUTS_MIGRATION_FLAG_KEY) === '1'
-  }
-
-  const normalizedUserId = userId.trim()
-  if (!normalizedUserId) {
-    return false
-  }
-
-  const scopedKey = buildMigrationFlagKey(normalizedUserId)
-  if (safeLocalStorageGet(scopedKey) === '1') {
-    return true
-  }
-
-  if (safeLocalStorageGet(SHORTCUTS_MIGRATION_FLAG_KEY) === '1') {
-    safeLocalStorageSet(scopedKey, '1')
-    safeLocalStorageRemove(SHORTCUTS_MIGRATION_FLAG_KEY)
-    return true
-  }
-
-  return false
-}
-
-export const markShortcutsMigrated = (userId?: string) => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const normalizedUserId = userId?.trim()
-  if (normalizedUserId) {
-    safeLocalStorageSet(buildMigrationFlagKey(normalizedUserId), '1')
-    return
-  }
-
-  safeLocalStorageSet(SHORTCUTS_MIGRATION_FLAG_KEY, '1')
-}
-
-export const backupLocalShortcuts = (shortcuts: ShortcutItem[]) => {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const storedItems = normalizeShortcutList(toStoredShortcutInput(shortcuts))
-  if (shortcuts.length > 0 && storedItems.length === 0) {
-    return
-  }
-
-  safeLocalStorageSet(SHORTCUTS_STORAGE_BACKUP_KEY, serializeShortcutPayload(storedItems))
-}
-
-export type CloudMigrationAction = 'upload-local' | 'use-cloud' | 'noop'
-
-export const decideCloudMigrationAction = (params: {
-  hasMigration: boolean
-  localCount: number
-  cloudCount: number
-}): CloudMigrationAction => {
-  const { hasMigration, localCount, cloudCount } = params
-
-  if (cloudCount > 0) {
-    return 'use-cloud'
-  }
-
-  if (!hasMigration && localCount > 0) {
-    return 'upload-local'
-  }
-
-  return 'noop'
 }

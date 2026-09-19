@@ -1,13 +1,22 @@
 import type {
   ReorderShortcutsRequest,
-  ReplaceShortcutItem,
-  ShortcutDraft,
   ShortcutItem,
   ShortcutListResponse,
 } from '@/features/home/types'
 import { request } from './client'
 
 export type Shortcut = ShortcutItem
+
+export interface ShortcutPayload {
+  title: string
+  url: string
+  icon: string
+}
+
+export interface CreateShortcutPayload extends ShortcutPayload {
+  /** 由客户端生成，使 create 幂等：队列重放不会重复插入 */
+  id: string
+}
 
 const nowIso = () => new Date().toISOString()
 
@@ -49,46 +58,48 @@ export const defaultShortcuts: ShortcutItem[] = [
   },
 ].map((item, index) => buildDefaultShortcut(index, item))
 
+/** 纯本地常量，不发请求 */
 export const getDefaultShortcuts = async (): Promise<ShortcutItem[]> => defaultShortcuts
 
-export const getMyShortcuts = async () => {
-  const response = await request<ShortcutListResponse>('/api/me/shortcuts', {
+/**
+ * 所有端点都返回 ShortcutListResponse 信封（权威列表 + revision）。
+ * 写端点必须带上调用方已知的 expectedRevision，落后时服务端返回 409。
+ */
+export const getMyShortcuts = (since?: number) =>
+  request<ShortcutListResponse>('/api/me/shortcuts', {
     method: 'GET',
     auth: true,
+    query: since === undefined ? undefined : { since },
   })
-  return response.items
-}
 
-export const createMyShortcut = (payload: ShortcutDraft) =>
-  request<ShortcutItem>('/api/me/shortcuts', {
+export const createMyShortcut = (payload: CreateShortcutPayload, expectedRevision: number) =>
+  request<ShortcutListResponse>('/api/me/shortcuts', {
     method: 'POST',
     auth: true,
+    query: { expectedRevision },
     body: payload,
   })
 
-export const updateMyShortcut = (id: string, payload: ShortcutDraft) =>
-  request<ShortcutItem>(`/api/me/shortcuts/${encodeURIComponent(id)}`, {
+export const updateMyShortcut = (id: string, payload: ShortcutPayload, expectedRevision: number) =>
+  request<ShortcutListResponse>(`/api/me/shortcuts/${encodeURIComponent(id)}`, {
     method: 'PUT',
     auth: true,
+    query: { expectedRevision },
     body: payload,
   })
 
-export const deleteMyShortcut = (id: string) =>
-  request<void>(`/api/me/shortcuts/${encodeURIComponent(id)}`, {
+/** 幂等：目标已不存在时服务端也返回成功 */
+export const deleteMyShortcut = (id: string, expectedRevision: number) =>
+  request<ShortcutListResponse>(`/api/me/shortcuts/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     auth: true,
+    query: { expectedRevision },
   })
 
-export const reorderMyShortcuts = (payload: ReorderShortcutsRequest) =>
+export const reorderMyShortcuts = (payload: ReorderShortcutsRequest, expectedRevision: number) =>
   request<ShortcutListResponse>('/api/me/shortcuts/reorder', {
     method: 'PATCH',
     auth: true,
+    query: { expectedRevision },
     body: payload,
-  })
-
-export const replaceMyShortcuts = (items: ReplaceShortcutItem[]) =>
-  request<ShortcutListResponse>('/api/me/shortcuts', {
-    method: 'PUT',
-    auth: true,
-    body: { items },
   })

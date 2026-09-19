@@ -39,14 +39,25 @@ export const GoogleIcon: IconType = (props: IconBaseProps) =>
     }),
   )
 
+// 旧版存储键：仅用于一次性迁移，迁移完成后会被清除
 export const SHORTCUT_STORAGE_KEY = 'shortcuts'
 export const SHORTCUTS_STORAGE_BACKUP_KEY = 'shortcuts-backup'
 export const SHORTCUTS_STORAGE_RECOVERY_KEY = 'shortcuts-recovery'
 export const SHORTCUTS_STORAGE_RECOVERY_PREV_KEY = 'shortcuts-recovery-prev'
 export const SHORTCUTS_MIGRATION_FLAG_KEY = 'shortcuts-cloud-migrated'
+
+// v2 同步存储：按账号隔离，guest 表示未登录状态
+export const SHORTCUTS_DATA_KEY_PREFIX = 'startpage_shortcuts_v2_'
+export const SHORTCUTS_SYNC_KEY_PREFIX = 'startpage_shortcuts_sync_v2_'
+export const GUEST_SCOPE = 'guest'
+
 export const ENGINE_STORAGE_KEY = 'search-engine'
 export const SEARCH_HISTORY_STORAGE_KEY = 'search-history'
 export const MAX_SEARCH_HISTORY = 8
+
+// 必须与后端 maxTitleLength（backend/internal/api/types.go）保持一致，
+// 否则本地能存、登录同步时会被 400 拒绝并丢弃该操作。
+export const MAX_SHORTCUT_TITLE_LENGTH = 80
 
 export const engines: SearchEngine[] = [
   { id: 'google', name: 'Google', icon: GoogleIcon, color: '#4285f4', url: 'https://www.google.com/search?q=' },
@@ -79,7 +90,5 @@ export const engines: SearchEngine[] = [
 
 export const FALLBACK_ENGINES = engines.slice(0, 4)
 
-export const WALLPAPER_API = 'https://api.aloys23.link/api/v1/image/bing'
-export const WALLPAPER_BASE = 'https://api.aloys23.link'
 export const WALLPAPER_FALLBACK =
   'radial-gradient(circle at 18% 18%, rgba(95, 121, 201, 0.42), transparent 42%), radial-gradient(circle at 78% 8%, rgba(52, 101, 179, 0.36), transparent 35%), linear-gradient(145deg, #0d1428 0%, #101f3d 48%, #0a1429 100%)'

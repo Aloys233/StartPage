@@ -1,11 +1,12 @@
 "use client"
 
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { getSessionSnapshot, subscribeSession } from '@/api/auth'
-import { updateMySettings } from '@/api/settings'
+import { getSessionSnapshot, subscribeSession } from '@/api/client'
+import { getMySettings, updateMySettings } from '@/api/settings'
 import { getSuggestions } from '@/api/suggestions'
 import { cn } from '@/lib/utils'
+import { useIsMounted } from '@/lib/useIsMounted'
 import { engines, FALLBACK_ENGINES, MAX_SEARCH_HISTORY } from '@/features/home/constants'
 import { SearchEngineSelect } from '@/features/home/components/SearchEngineSelect'
 import { SuggestionsPanel } from '@/features/home/components/SuggestionsPanel'
@@ -14,20 +15,9 @@ import { loadSearchHistory, loadStoredEngine, saveSearchHistory, saveStoredEngin
 import { setSearchUiState } from '@/features/home/searchUiState'
 import type { SearchEngine, SuggestionStatus } from '@/features/home/types'
 import { openExternalLink } from '@/features/home/url'
-import { LogtoAuth } from '@/components/LogtoAuth'
 
-const emptySubscribe = () => () => {}
-
-export function SearchIsland() {
-  return (
-    <LogtoAuth>
-      <SearchContent />
-    </LogtoAuth>
-  )
-}
-
-function SearchContent() {
-  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
+export function SearchBar() {
+  const isMounted = useIsMounted()
   const [query, setQuery] = useState('')
   const [engine, setEngine] = useState<SearchEngine>(() => loadStoredEngine())
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getSessionSnapshot().user))
@@ -44,6 +34,17 @@ function SearchContent() {
   const suggestionCacheRef = useRef<Map<string, string[]>>(new Map())
   const suggestionListId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
+  // 供 portal 目标使用的宿主元素：必须走 state，渲染期读 ref.current 拿不到值也不会触发重渲染
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null)
+  // 云端偏好是否已拉取完成：完成前不回写，避免用本地值覆盖服务端设置
+  const remoteSettingsLoadedRef = useRef(false)
+  // 用户是否手动切换过引擎：切换后不再被迟到的云端响应覆盖
+  const engineTouchedRef = useRef(false)
+
+  const attachContainer = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node
+    setPortalContainer(node)
+  }, [])
 
   const activeEngine = isMounted ? engine : engines[0]
 
@@ -70,6 +71,40 @@ function SearchContent() {
     return unsubscribe
   }, [])
 
+  // 登录后先拉取云端偏好并应用，否则每次进页面都会用本地值把服务端设置覆盖掉
+  useEffect(() => {
+    if (!isAuthenticated) {
+      remoteSettingsLoadedRef.current = false
+      return
+    }
+
+    let cancelled = false
+
+    void getMySettings()
+      .then((settings) => {
+        if (cancelled) {
+          return
+        }
+        const remoteEngine = engines.find((item) => item.id === settings.defaultEngine)
+        // 用户已在响应返回前手动选过引擎时，以用户选择为准
+        if (remoteEngine && !engineTouchedRef.current) {
+          setEngine(remoteEngine)
+        }
+      })
+      .catch(() => {
+        // 拉取失败时继续用本地引擎，并允许后续把本地选择同步上去
+      })
+      .finally(() => {
+        if (!cancelled) {
+          remoteSettingsLoadedRef.current = true
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated])
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -77,7 +112,8 @@ function SearchContent() {
 
     saveStoredEngine(engine.id)
 
-    if (!isAuthenticated) {
+    // 云端偏好拉取完成前不回写，避免覆盖服务端设置
+    if (!isAuthenticated || !remoteSettingsLoadedRef.current) {
       return
     }
 
@@ -93,26 +129,6 @@ function SearchContent() {
 
     saveSearchHistory(recentSearches)
   }, [recentSearches])
-
-  useEffect(() => {
-    const onDefaultEngineSync = (event: Event) => {
-      const detail = (event as CustomEvent<{ engineId?: string }>).detail
-      const engineId = detail?.engineId
-      if (!engineId) {
-        return
-      }
-
-      const remoteEngine = engines.find((item) => item.id === engineId)
-      if (remoteEngine) {
-        setEngine(remoteEngine)
-      }
-    }
-
-    window.addEventListener('home:default-engine-sync', onDefaultEngineSync)
-    return () => {
-      window.removeEventListener('home:default-engine-sync', onDefaultEngineSync)
-    }
-  }, [])
 
   useEffect(() => {
     const onGlobalKeyDown = (event: KeyboardEvent) => {
@@ -255,6 +271,34 @@ function SearchContent() {
   }
 
   const onKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter / Escape 必须无条件响应：候选面板有 180ms 防抖，
+    // 不能因为面板尚未展开就把回车吞掉。
+    if (event.key === 'Enter') {
+      event.preventDefault()
+
+      if (showSuggestions && selectedIdx >= 0) {
+        if (suggestions.length > 0) {
+          handleSearch(suggestions[selectedIdx])
+        } else if (selectedIdx < filteredRecentSearches.length) {
+          handleSearch(filteredRecentSearches[selectedIdx])
+        } else {
+          const fallbackEngine = FALLBACK_ENGINES[selectedIdx - filteredRecentSearches.length]
+          if (fallbackEngine) {
+            handleSearch(query, fallbackEngine)
+          }
+        }
+      } else {
+        handleSearch()
+      }
+      return
+    }
+
+    if (event.key === 'Escape') {
+      setShowSuggestions(false)
+      setSelectedIdx(-1)
+      return
+    }
+
     if (!showSuggestions) return
 
     const maxIdx =
@@ -271,33 +315,6 @@ function SearchContent() {
     if (event.key === 'ArrowUp') {
       event.preventDefault()
       setSelectedIdx((prev) => Math.max(prev - 1, -1))
-      return
-    }
-
-    if (event.key === 'Enter') {
-      event.preventDefault()
-
-      if (selectedIdx >= 0) {
-        if (suggestions.length > 0) {
-          handleSearch(suggestions[selectedIdx])
-        } else if (selectedIdx < filteredRecentSearches.length) {
-          handleSearch(filteredRecentSearches[selectedIdx])
-        } else {
-          const fallbackIdx = selectedIdx - filteredRecentSearches.length
-          const fallbackEngine = FALLBACK_ENGINES[fallbackIdx]
-          if (fallbackEngine) {
-            handleSearch(query, fallbackEngine)
-          }
-        }
-      } else {
-        handleSearch()
-      }
-      return
-    }
-
-    if (event.key === 'Escape') {
-      setShowSuggestions(false)
-      setSelectedIdx(-1)
     }
   }
 
@@ -323,20 +340,21 @@ function SearchContent() {
 
   return (
     <>
-      {/* 搜索聚焦时的全屏周围纯模糊遮罩：纯高斯模糊虚化背景，绝无黑色遮罩背景压暗 */}
-      <div
-        className={cn(
-          'pointer-events-none fixed inset-0 z-20 transition-[opacity,backdrop-filter] duration-300 ease-out',
-          focused || showSuggestions || showEngineMenu
-            ? 'opacity-100 backdrop-blur-md [-webkit-backdrop-filter:blur(12px)]'
-            : 'opacity-0 backdrop-blur-none [-webkit-backdrop-filter:none]',
-        )}
-        aria-hidden="true"
-      />
+      {/*
+       * 搜索聚焦时的全屏周围纯模糊遮罩：纯高斯模糊虚化背景，绝无黑色遮罩背景压暗。
+       * 只在需要时挂载 —— 与二级页面遮罩同理，关闭后必须卸载，
+       * 否则 opacity:0 的图层会留下陈旧的 backdrop 快照（表现为页面上残留一块模糊）。
+       */}
+      {(focused || showSuggestions || showEngineMenu) && (
+        <div
+          className="overlay-blur-mask pointer-events-none fixed inset-0 z-20 backdrop-blur-md [-webkit-backdrop-filter:blur(12px)]"
+          aria-hidden="true"
+        />
+      )}
 
       {/* 搜索岛外层定位容器 */}
       <div
-        ref={containerRef}
+        ref={attachContainer}
         suppressHydrationWarning
         className="relative z-30 mb-[6vh] w-full max-w-[760px]"
       >
@@ -368,7 +386,7 @@ function SearchContent() {
               engine={activeEngine}
               engines={engines}
               showEngineMenu={showEngineMenu}
-              portalContainer={containerRef.current}
+              portalContainer={portalContainer}
               onToggle={() => {
                 setShowEngineMenu((prev) => {
                   const next = !prev
@@ -379,6 +397,7 @@ function SearchContent() {
                 })
               }}
               onSelect={(item) => {
+                engineTouchedRef.current = true
                 setEngine(item)
                 setShowEngineMenu(false)
               }}
@@ -442,7 +461,6 @@ function SearchContent() {
           <div className={cn('search-expand-wrapper', hasSuggestions && 'is-expanded')}>
             <div className="search-expand-inner">
               <SuggestionsPanel
-                showSuggestions={hasSuggestions}
                 query={query}
                 suggestionListId={suggestionListId}
                 suggestionStatus={suggestionStatus}

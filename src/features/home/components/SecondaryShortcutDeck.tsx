@@ -1,6 +1,5 @@
 "use client"
 
-import type { WheelEvent } from 'react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   ArrowDown,
@@ -13,8 +12,8 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react'
-import { ShortcutsIsland } from '@/features/home/islands/ShortcutsIsland'
-import { getShortcutIcon } from '@/features/home/shortcuts'
+import { ShortcutsSection } from '@/features/home/components/ShortcutsSection'
+import { ShortcutIcon } from '@/features/home/components/ShortcutIcon'
 import { secondaryShortcutCategories } from '@/features/home/secondaryShortcuts'
 import { buildFaviconUrl, getHostname, openExternalLink } from '@/features/home/url'
 import {
@@ -28,6 +27,7 @@ import {
   type WallpaperSource,
 } from '@/features/home/wallpaper'
 import { cn } from '@/lib/utils'
+import { useIsMounted } from '@/lib/useIsMounted'
 
 type SwipeDirection = 'horizontal' | 'vertical'
 
@@ -35,8 +35,6 @@ const SWIPE_THRESHOLD = 56
 const WHEEL_COOLDOWN_MS = 320
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-
-const emptySubscribe = () => () => {}
 
 const subscribeResize = (onStoreChange: () => void) => {
   window.addEventListener('resize', onStoreChange)
@@ -48,7 +46,7 @@ const getOrientationSnapshot = (): ScreenOrientation => getScreenOrientation()
 const getOrientationServerSnapshot = (): ScreenOrientation => 'landscape'
 
 export function SecondaryShortcutDeck() {
-  const isMounted = useSyncExternalStore(emptySubscribe, () => true, () => false)
+  const isMounted = useIsMounted()
   const [activePage, setActivePage] = useState(0)
   const [direction, setDirection] = useState<SwipeDirection>('horizontal')
   const [currentSource, setCurrentSource] = useState<WallpaperSource>(() => getStoredWallpaperSource())
@@ -65,6 +63,7 @@ export function SecondaryShortcutDeck() {
 
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
   const wheelTsRef = useRef(0)
+  const swipeAreaRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const onSourceChange = (event: Event) => {
@@ -149,29 +148,39 @@ export function SecondaryShortcutDeck() {
     }
   }
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    const now = Date.now()
-    if (now - wheelTsRef.current < WHEEL_COOLDOWN_MS) {
+  // React 会把 onWheel 注册为 root 上的 passive 监听，其中的 preventDefault 会被忽略；
+  // 因此必须手动挂载非 passive 的原生监听，才能真正阻止外层页面跟随滚动。
+  useEffect(() => {
+    const node = swipeAreaRef.current
+    if (!node) {
       return
     }
 
-    const dominantDelta =
-      direction === 'horizontal'
-        ? (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY)
-        : event.deltaY
+    const onWheel = (event: WheelEvent) => {
+      const now = Date.now()
+      if (now - wheelTsRef.current < WHEEL_COOLDOWN_MS) {
+        return
+      }
 
-    if (Math.abs(dominantDelta) < 26) {
-      return
+      const dominantDelta =
+        direction === 'horizontal'
+          ? (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY)
+          : event.deltaY
+
+      if (Math.abs(dominantDelta) < 26) {
+        return
+      }
+
+      event.preventDefault()
+      wheelTsRef.current = now
+      setActivePage((prev) => clamp(prev + (dominantDelta > 0 ? 1 : -1), 0, maxPageIndex))
     }
 
-    event.preventDefault()
-    wheelTsRef.current = now
-    if (dominantDelta > 0) {
-      goNext()
-    } else {
-      goPrev()
+    node.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      node.removeEventListener('wheel', onWheel)
     }
-  }
+  }, [direction, maxPageIndex])
 
   return (
     <section className="mx-auto w-full max-w-[1100px] space-y-4">
@@ -238,17 +247,15 @@ export function SecondaryShortcutDeck() {
       </header>
 
       <div className="cards rounded-[30px] border border-white/15 p-3 shadow-2xl sm:p-4 [--card-hover-scale:1]">
-        <div className="relative h-[66vh] min-h-[460px] max-h-[760px] overflow-hidden rounded-[24px] border border-white/10 bg-black/25">
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              backgroundImage:
-                'radial-gradient(rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.4) 100%), radial-gradient(rgba(0, 0, 0, 0) 33%, rgba(0, 0, 0, 0.25) 166%)',
-            }}
-          />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/35 to-transparent" />
+        {/*
+         * 面板通透度对齐首页卡片：只保留外层 .cards 的单层 rgba(0,0,0,0.25) 毛玻璃。
+         * 此处不再叠加 bg-black/25 与径向暗角，避免多层暗色叠加成"黑色遮罩"。
+         */}
+        <div className="relative h-[66vh] min-h-[460px] max-h-[760px] overflow-hidden rounded-[24px] border border-white/10">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/20 to-transparent" />
 
           <div
+            ref={swipeAreaRef}
             className={cn(
               'relative h-full w-full select-none',
               direction === 'horizontal' ? 'touch-pan-y' : 'touch-pan-x',
@@ -265,7 +272,6 @@ export function SecondaryShortcutDeck() {
             onPointerCancel={() => {
               pointerStartRef.current = null
             }}
-            onWheel={handleWheel}
           >
             <div
               className={cn(
@@ -290,7 +296,7 @@ export function SecondaryShortcutDeck() {
                     滑动切页
                   </div>
                 </div>
-                <ShortcutsIsland staticView />
+                <ShortcutsSection staticView />
               </section>
 
               {secondaryShortcutCategories.map((category) => (
@@ -313,7 +319,11 @@ export function SecondaryShortcutDeck() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-black/40 text-white shadow-sm">
-                            {getShortcutIcon(shortcut.title, buildFaviconUrl(shortcut.url))}
+                            <ShortcutIcon
+                              title={shortcut.title}
+                              url={shortcut.url}
+                              icon={buildFaviconUrl(shortcut.url)}
+                            />
                           </div>
                           <div className="min-w-0 space-y-1">
                             <p className="truncate text-sm font-semibold text-white/95">{shortcut.title}</p>
@@ -418,7 +428,7 @@ export function SecondaryShortcutDeck() {
                     </li>
                     <li>
                       <span className="font-medium text-white/80">平滑淡入：</span>
-                      切换壁纸或点击“换一张”后，新壁纸在后台预加载解码完成后以 1000ms 电影级平滑交叉淡入呈现。
+                      切换壁纸或点击“换一张”后，新壁纸在后台预加载解码完成后以 500ms 平滑交叉淡入呈现。
                     </li>
                   </ul>
                 </div>

@@ -1,15 +1,14 @@
 "use client"
 
-import type { ReactNode } from 'react'
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Shortcut } from '@/api/shortcuts'
+import { ShortcutIcon } from '@/features/home/components/ShortcutIcon'
 import { cn } from '@/lib/utils'
 
 interface ShortcutsGridProps {
   shortcuts: Shortcut[]
   showSuggestions: boolean
   query: string
-  animated?: boolean
   onOpenShortcut: (url: string) => void
   onEditShortcut: (shortcut: Shortcut) => void
   onDeleteShortcut: (id: string, title: string) => void
@@ -17,7 +16,6 @@ interface ShortcutsGridProps {
   onMoveShortcutDown: (id: string) => void
   onAddShortcut: () => void
   getHostname: (url: string) => string
-  getShortcutIcon: (title: string, icon: string) => ReactNode
 }
 
 export function ShortcutsGrid({
@@ -31,7 +29,6 @@ export function ShortcutsGrid({
   onMoveShortcutDown,
   onAddShortcut,
   getHostname,
-  getShortcutIcon,
 }: ShortcutsGridProps) {
   return (
     <div
@@ -52,7 +49,7 @@ export function ShortcutsGrid({
           >
             <div className="cards flex h-20 w-20 items-center justify-center overflow-hidden rounded-[26px] border border-white/15 shadow-xl [--card-hover-scale:1.06] [--card-active-scale:0.96]">
               <div className="text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] transition-transform duration-300 group-hover/icon:scale-110">
-                {getShortcutIcon(shortcut.title, shortcut.icon)}
+                <ShortcutIcon title={shortcut.title} url={shortcut.url} icon={shortcut.icon} />
               </div>
             </div>
 
@@ -112,7 +109,7 @@ export function ShortcutsGrid({
 
       <button
         type="button"
-        className="group/add flex cursor-pointer flex-col items-center gap-5 transition-transform duration-200"
+        className="group/add relative flex cursor-pointer flex-col items-center gap-5 transition-transform duration-200"
         onClick={onAddShortcut}
         aria-label="Add shortcut"
       >

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,6 +37,12 @@ export function ShortcutDialog({
       <DialogContent className="border-white/20 p-10 text-white">
         <DialogHeader>
           <DialogTitle>{dialogMode === 'add' ? 'Add Link' : 'Update Link'}</DialogTitle>
+          {/* Radix 要求 Dialog 必须有描述（否则会在控制台告警），这里用屏幕阅读器专用文案补齐 */}
+          <DialogDescription className="sr-only">
+            {dialogMode === 'add'
+              ? '填写名称与网址后确认添加一个新的快捷方式。'
+              : '修改名称或网址后保存。'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-7 py-6">

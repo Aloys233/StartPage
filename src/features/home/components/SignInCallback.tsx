@@ -1,11 +1,10 @@
 "use client"
 
 import { useHandleSignInCallback } from '@logto/react';
-import { LogtoAuth } from '@/components/LogtoAuth';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-function CallbackContent() {
+export function SignInCallback() {
   const router = useRouter();
   const { isLoading, isAuthenticated, error } = useHandleSignInCallback(() => {
     router.push('/');
@@ -33,13 +32,5 @@ function CallbackContent() {
         {isLoading ? '正在验证会话中...' : '跳转中...'}
       </div>
     </div>
-  );
-}
-
-export function CallbackIsland() {
-  return (
-    <LogtoAuth>
-      <CallbackContent />
-    </LogtoAuth>
   );
 }

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "@fontsource/sora/400.css";
 @import "@fontsource/sora/600.css";
 
@@ -72,14 +73,8 @@
 }
 
 /*
- * 全局遮罩毛玻璃：搜索聚焦与抽屉背景
+ * 模态浮层毛玻璃
  */
-.glass-overlay {
-  background-color: rgba(0, 0, 0, 0.35);
-  -webkit-backdrop-filter: blur(16px) !important;
-  backdrop-filter: blur(16px) !important;
-}
-
 .glass-modal {
   background-color: rgba(0, 0, 0, 0.25);
   -webkit-backdrop-filter: blur(10px) !important;
@@ -95,43 +90,6 @@
   backdrop-filter: blur(18px) saturate(180%) !important;
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.12);
-}
-
-/*
- * 面板切换淡入
- */
-@keyframes card-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.panel-swap .cards {
-  animation: card-fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* 交互栏 / 社交栏 */
-.social-bar {
-  transition:
-    background-color 0.3s,
-    backdrop-filter 0.3s,
-    -webkit-backdrop-filter 0.3s;
-}
-
-.social-bar:hover {
-  background-color: rgba(0, 0, 0, 0.25);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-}
-
-/* 文本截断 */
-.text-hidden {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /* 滚动条 */
@@ -160,23 +118,34 @@
   }
 }
 
-@keyframes zoom {
-  0% {
-    opacity: 0;
-    transform: scale(0.8) translateY(-50px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
 .animate-fade {
   animation: fade 0.4s ease forwards;
 }
 
-.animate-zoom {
-  animation: zoom 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/*
+ * 全屏模糊遮罩（二级页面背景虚化）
+ *
+ * 这个图层只在打开时挂载、关闭时直接卸载，绝不靠 opacity:0 留在合成树里 ——
+ * opacity 为 0 的图层依然参与合成，Chrome 会继续复用打开时那份陈旧的 backdrop
+ * 快照，返回一级页面后搜索卡一带就会残留一条模糊带（类改不掉，必须卸载）。
+ *
+ * 淡入用它自己的 @starting-style 实现：挂载时的首帧从 0 开始过渡，
+ * 因此不需要额外的挂载后置帧逻辑；不支持 @starting-style 的浏览器则直接呈现。
+ */
+.overlay-blur-mask {
+  opacity: 1;
+  transition:
+    opacity 0.3s ease-out,
+    backdrop-filter 0.3s ease-out,
+    -webkit-backdrop-filter 0.3s ease-out;
+}
+
+@starting-style {
+  .overlay-blur-mask {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
 }
 
 /*
@@ -203,58 +172,7 @@
   min-height: 0;
 }
 
-/*
- * 候选建议微滑入与淡入动画：轻盈灵动，作用于内容节点，不干扰祖先滤镜
- */
-@keyframes suggestion-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-suggestion-in {
-  animation: suggestion-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* 兼容 Tailwind-animate / tw-animate 语法 */
-.animate-in {
-  animation-duration: 200ms;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-  animation-fill-mode: both;
-}
-
-.fade-in {
-  animation-name: anim-fade-in;
-}
-
-@keyframes anim-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.slide-in-from-top-1 {
-  animation-name: anim-slide-top-1;
-}
-
-@keyframes anim-slide-top-1 {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* 进入/退出动画（animate-in / fade-in-0 / zoom-in-95 / slide-in-from-*）由 tw-animate-css 提供 */
 
 .font-clock {
   font-family: "Sora", "SF Pro Display", sans-serif;

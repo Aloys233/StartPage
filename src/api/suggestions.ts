@@ -85,9 +85,11 @@ export async function getSuggestions(query: string, engineId: SearchEngineId = '
       }
     }
   } catch (error) {
-    console.debug(`客户端直接请求搜索建议失败 (${engineId}):`, error)
+    // 用 warn 而非 debug：生产构建会移除 debug，而搜索建议失败（第三方 JSONP 被
+    // 拦截/限流）是需要在线上看得见的问题 —— 此时下面返回的是本地拼接的兜底词。
+    console.warn(`客户端直接请求搜索建议失败 (${engineId}):`, error)
   }
 
-  // 兜底回退建议
+  // 兜底建议（本地拼接，并非真实搜索建议）
   return [q, `${q} tutorial`, `${q} github`, `${q} docs`]
 }

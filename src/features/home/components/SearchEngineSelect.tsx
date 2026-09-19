@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -24,30 +23,11 @@ export function SearchEngineSelect({
   onToggle,
   onSelect,
 }: SearchEngineSelectProps) {
-  const [mounted, setMounted] = useState(false)
   const CurrentIcon = engine.icon
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!showEngineMenu) return
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        onToggle()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [showEngineMenu, onToggle])
-
-  const isPortal = mounted && Boolean(portalContainer)
+  // Escape 关闭菜单统一由 SearchBar 的全局 keydown 处理：
+  // 两处同时监听会因注册顺序不同而出现「关掉又立刻打开」的竞态。
+  const isPortal = Boolean(portalContainer)
 
   const menuDropdown = (
     <AnimatePresence>
@@ -148,11 +128,7 @@ export function SearchEngineSelect({
       </button>
 
       {/* 当宿主容器就绪时挂载到搜索岛外层（脱离 .cards 的 backdrop 隔离），否则就地渲染 */}
-      {isPortal && portalContainer
-        ? createPortal(menuDropdown, portalContainer)
-        : !portalContainer
-          ? menuDropdown
-          : null}
+      {portalContainer ? createPortal(menuDropdown, portalContainer) : menuDropdown}
     </div>
   )
 }

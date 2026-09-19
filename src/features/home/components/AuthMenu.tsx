@@ -1,11 +1,9 @@
 "use client"
 
 import { useLogto } from '@logto/react'
-import { useEffect, useState } from 'react'
-import { subscribeClientSession } from '@/api/auth'
-import { getSessionSnapshot } from '@/api/client'
+import { useEffect, useRef, useState } from 'react'
+import { getSessionSnapshot, subscribeSession } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { LogtoAuth } from '@/components/LogtoAuth'
 import type { UserProfile } from '@/features/home/types'
 import {
   DropdownMenu,
@@ -18,18 +16,44 @@ import {
 import { LogOut, User } from 'lucide-react'
 
 const ACCOUNT_CENTER_URL = 'https://accounts.aloys233.top'
+// 触发区与面板之间有 2px 间隙，直接 onMouseLeave 关闭会抖动，统一加一个短延迟再关
+const CLOSE_DELAY_MS = 140
 
-function AuthContent() {
+export function AuthMenu() {
   const { signIn, signOut, isAuthenticated, isLoading } = useLogto()
   const [user, setUser] = useState<UserProfile | null>(() => getSessionSnapshot().user)
   const [open, setOpen] = useState(false)
+  const closeTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const unsubscribe = subscribeClientSession((snapshot) => {
+    const unsubscribe = subscribeSession((snapshot) => {
       setUser(snapshot.user)
     })
     return unsubscribe
   }, [])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current)
+      }
+    }
+  }, [])
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }
+
+  const scheduleClose = () => {
+    cancelClose()
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null
+      setOpen(false)
+    }, CLOSE_DELAY_MS)
+  }
 
   if (isLoading) {
     return <div className="h-10 w-20 animate-pulse rounded-full bg-white/10" />
@@ -38,21 +62,34 @@ function AuthContent() {
   return (
     <div className="flex justify-end">
       {isAuthenticated && user ? (
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenu open={open} onOpenChange={(next) => {
+          cancelClose()
+          setOpen(next)
+        }}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="cards h-11 w-11 overflow-hidden rounded-full border border-white/20 shadow-lg transition-all [--card-hover-scale:1.06] hover:border-white/40 outline-none"
-              onMouseEnter={() => setOpen(true)}
+              className="cards flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/20 shadow-lg transition-all [--card-hover-scale:1.06] hover:border-white/40 outline-none"
+              onMouseEnter={() => {
+                cancelClose()
+                setOpen(true)
+              }}
+              onMouseLeave={scheduleClose}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={user.avatarUrl || '/vite.svg'} alt={user.email} className="h-full w-full object-cover" />
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatarUrl} alt={user.email} className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-5 w-5 text-white/70" />
+              )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
+            sideOffset={2}
             className="w-56 border-white/15 text-white/90 glass-modal rounded-2xl p-2 shadow-2xl"
-            onMouseLeave={() => setOpen(false)}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
           >
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
@@ -92,13 +129,5 @@ function AuthContent() {
         </Button>
       )}
     </div>
-  )
-}
-
-export function AuthIsland() {
-  return (
-    <LogtoAuth>
-      <AuthContent />
-    </LogtoAuth>
   )
 }

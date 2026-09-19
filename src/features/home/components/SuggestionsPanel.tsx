@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils'
 import type { SearchEngine, SuggestionStatus } from '../types'
 
 interface SuggestionsPanelProps {
-  showSuggestions: boolean
   query: string
   suggestionListId: string
   suggestionStatus: SuggestionStatus

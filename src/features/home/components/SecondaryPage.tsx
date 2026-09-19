@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { SecondaryPageOverlay } from '@/features/home/components/SecondaryPageOverlay'
+import { AuthMenu } from '@/features/home/components/AuthMenu'
 import { isTypingTarget } from '@/features/home/shortcuts'
-import { AuthIsland } from '@/features/home/islands/AuthIsland'
-import { LogtoAuth } from '@/components/LogtoAuth'
 
 // 延迟加载二级抽屉桌面，跳过服务端渲染，消除首屏数十个跨域 Favicon 的 preload 阻塞
 const SecondaryShortcutDeck = dynamic(
@@ -20,20 +19,10 @@ const SecondaryShortcutDeck = dynamic(
   },
 )
 
-export function SecondaryPageIsland() {
-  return (
-    <LogtoAuth>
-      <SecondaryPageContent />
-    </LogtoAuth>
-  )
-}
-
-function SecondaryPageContent() {
+export function SecondaryPage() {
   const [open, setOpen] = useState(false)
-  const [hasEverOpened, setHasEverOpened] = useState(false)
 
   const openSecondaryPage = () => {
-    setHasEverOpened(true)
     setOpen(true)
   }
 
@@ -110,8 +99,17 @@ function SecondaryPageContent() {
   }, [open])
 
   return (
-    <SecondaryPageOverlay open={open} onClose={() => setOpen(false)} authSlot={<AuthIsland />}>
-      {open || hasEverOpened ? <SecondaryShortcutDeck /> : null}
+    <SecondaryPageOverlay open={open} onClose={() => setOpen(false)} authSlot={<AuthMenu />}>
+      {/*
+       * 关闭时必须真正卸载抽屉内容，不能像以前那样用 hasEverOpened 把它留在树里。
+       *
+       * 只是把内容切成 invisible 的话，抽屉里数十个带 backdrop-filter 的卡片
+       * 仍然留在渲染树里、且与一级页面的搜索卡处在同一区域；关闭那一刻它们
+       * 从可见变不可见，会让合成器里搜索卡那份 backdrop 采样变成陈旧快照 ——
+       * 表现就是返回一级页面时搜索框那一带残留一块比卡片略大的硬边模糊矩形，
+       * 而且要等下一次无关重绘（秒针跳字）才消失。卸载即彻底消除。
+       */}
+      {open ? <SecondaryShortcutDeck /> : null}
     </SecondaryPageOverlay>
   )
 }
